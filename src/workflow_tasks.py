@@ -66,7 +66,7 @@ def _handle_notify_approval(event: Dict[str, Any]) -> Dict[str, Any]:
             f"Requested At : {now_iso}\n\n"
             f"Scanner-Safe Review Link (requires explicit click):\n"
             f"{review_url}\n\n"
-            f"This AWS Step Functions workflow is paused at $0 compute cost.\n"
+            f"The break-glass approval workflow is waiting for an owner decision.\n"
             f"If you do not approve within 60 minutes, the drop auto-shreds."
         )
         try:

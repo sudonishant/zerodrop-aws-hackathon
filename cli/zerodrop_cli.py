@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ZeroDrop v3.0 Ultra-Pro CLI — Zero-Knowledge Encrypt, Shamir Split, Panic Shred & Verify.
+"""ZeroDrop v4.0 APEX CLI — client-side encryption, Shamir sharing, shred, and audit verification.
 
 Usage:
   cat .env | python3 cli/zerodrop_cli.py push --url http://127.0.0.1:8787 --label "Prod Env"
@@ -297,7 +297,7 @@ def cmd_push(args: argparse.Namespace) -> None:
         raise SystemExit(f"Failed ({status}): {data}")
 
     suffix = "&p=1" if args.passphrase else ""
-    print("✅ ZeroDrop v4 APEX Created (Key stayed local; AES-256-GCM)")
+    print("✅ ZeroDrop v4.0 APEX drop created (key stayed local; AES-256-GCM)")
     print(f"   Drop ID     : {data['drop_id']}")
     print(f"   Kill Token  : {data.get('kill_token', '')}")
     print(f"   Mode        : {data['mode']}")
@@ -341,13 +341,13 @@ def cmd_pull(args: argparse.Namespace) -> None:
             if ok_bytes != b"ZERODROP_KEY_OK":
                 raise ValueError("mismatch")
         except Exception:
-            raise SystemExit("❌ Wrong passphrase or bad Shamir share! Checked locally BEFORE burning — secret stays intact on AWS.")
+            raise SystemExit("❌ Wrong passphrase or bad Shamir share! Checked locally before claim — backend record remains unburned.")
 
     status, data = http_json(
         "POST",
         f"{base}/api/drops/{drop_id}/claim",
         {"human_confirm": True},
-        headers={"X-ZeroDrop-Human": "1", "User-Agent": "ZeroDrop-CLI/3.0"},
+        headers={"X-ZeroDrop-Human": "1", "User-Agent": "ZeroDrop-CLI"},
     )
     if status != 200:
         raise SystemExit(f"Claim failed ({status}): {data}")
@@ -386,9 +386,9 @@ def cmd_verify(args: argparse.Namespace) -> None:
         sig_ok = verify_ecdsa_p256_p1363(spki, entry["signature_p1363_b64"], msg)
         if not sig_ok or entry["prev_hash"] != prev_hash or recomputed != entry["entry_sha256"]:
             raise SystemExit(f"❌ Chain verification failed at seq #{entry['seq']} ({entry['event']})")
-        print(f"  ✅ #{entry['seq']} {entry['event']} | hash={recomputed[:16]}... | KMS P-256 SIG VALID")
+        print(f"  ✅ #{entry['seq']} {entry['event']} | hash={recomputed[:16]}... | P-256 signature valid")
         prev_hash = recomputed
-    print(f"🔐 Verified {len(chain)}/{len(chain)} hash-chained KMS ECDSA P-256 entries for drop {args.drop_id}.")
+    print(f"🔐 Verified {len(chain)}/{len(chain)} hash-chained P-256 signatures for drop {args.drop_id}.")
 
 
 def cmd_race(args: argparse.Namespace) -> None:
@@ -406,18 +406,14 @@ def cmd_soc(args: argparse.Namespace) -> None:
     if status != 200:
         raise SystemExit(f"Failed ({status}): {data}")
     c = data["counters"]
-    print("🛡️  ZeroDrop Live AWS SOC Counters:")
+    print("🛡️  ZeroDrop aggregate telemetry counters (no per-event details):")
     print(
         f"   Created={c['total_created']} | Burned={c['total_burned']} | "
         f"BotsBlocked={c['total_bots_blocked']} | Canary={c['total_canary_alerts']} | "
         f"PanicShreds={c['total_panic_shreds']} | Approvals={c['total_approvals']}"
     )
-    for ev in (data.get("events") or [])[:8]:
-        print(f"   - [{ev['ts']}] {ev['event']} ({ev['drop_id']}): {ev['detail']}")
-
-
 def main() -> None:
-    parser = argparse.ArgumentParser(description="ZeroDrop v3 Zero-Knowledge CLI")
+    parser = argparse.ArgumentParser(description="ZeroDrop v4.0 APEX client-side secret escrow CLI")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_push = sub.add_parser("push", help="Encrypt stdin/text locally and upload ciphertext")
@@ -444,17 +440,17 @@ def main() -> None:
     p_shred.add_argument("--kill-token", required=True)
     p_shred.set_defaults(func=cmd_shred)
 
-    p_ver = sub.add_parser("verify", help="Verify hash-chained KMS P-256 audit ledger")
+    p_ver = sub.add_parser("verify", help="Verify the hash-chained P-256 audit ledger")
     p_ver.add_argument("--url", required=True)
     p_ver.add_argument("--drop-id", required=True)
     p_ver.set_defaults(func=cmd_verify)
 
-    p_race = sub.add_parser("race", help="Run 20-thread DynamoDB concurrency race proof")
+    p_race = sub.add_parser("race", help="Run the local-emulator 20-thread concurrency test")
     p_race.add_argument("--url", required=True)
     p_race.add_argument("-n", type=int, default=20)
     p_race.set_defaults(func=cmd_race)
 
-    p_soc = sub.add_parser("soc", help="Fetch live anonymized AWS SOC telemetry & counters")
+    p_soc = sub.add_parser("soc", help="Fetch aggregate telemetry counters; no event list is returned")
     p_soc.add_argument("--url", required=True)
     p_soc.set_defaults(func=cmd_soc)
 

@@ -1,4 +1,4 @@
-"""Automated verification suite for ZeroDrop v2 (run with pytest)."""
+"""Local automated verification suite for ZeroDrop v4.0 APEX (run with pytest)."""
 
 from __future__ import annotations
 
@@ -513,6 +513,47 @@ const [keyB64u, pass, ivB64, ctB64] = process.argv.slice(1);
         text=True,
     )
     assert res.stdout == pt.decode()
+
+
+def test_approved_drop_cannot_be_collected_after_configured_ttl() -> None:
+    backend = build_local_backend(grace_seconds=5.0)
+    _, created = _call_api(
+        "POST",
+        "/api/drops",
+        {
+            "mode": "approval",
+            "label": "Synthetic expiry regression",
+            "ttl_minutes": 5,
+            "iv_b64": base64.b64encode(b"123456789012").decode(),
+            "ciphertext_b64": base64.b64encode(b"X" * 32).decode(),
+            "demo_inbox": True,
+        },
+    )
+    drop_id = created["drop_id"]
+    st_req, req = _call_api(
+        "POST",
+        f"/api/drops/{drop_id}/claim",
+        {"human_confirm": True},
+        headers={"X-ZeroDrop-Human": "1"},
+    )
+    assert st_req == 202
+    claim_secret = req["claim_secret"]
+    backend["table"].update_item(
+        Key={"drop_id": drop_id},
+        UpdateExpression="SET #st = :approved, claim_secret_hash = :csh, ttl_epoch = :expired",
+        ExpressionAttributeNames={"#st": "status"},
+        ExpressionAttributeValues={
+            ":approved": "APPROVED_READY",
+            ":csh": hashlib.sha256(claim_secret.encode("utf-8")).hexdigest(),
+            ":expired": api_handler.utc_epoch() - 1,
+        },
+    )
+
+    st_collect, result = _call_api("POST", f"/api/drops/{drop_id}/collect", {"claim_secret": claim_secret})
+    assert st_collect == 410 and result["error"] == "EXPIRED"
+    stored = backend["table"].get_item(Key={"drop_id": drop_id})["Item"]
+    assert stored["status"] == "APPROVED_READY"
+    assert stored.get("ciphertext_b64")
 
 
 def test_file_shred_and_approval_grace_expiry() -> None:

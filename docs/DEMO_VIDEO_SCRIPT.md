@@ -1,33 +1,32 @@
-# ZeroDrop v3 Ultra-Pro — < 3 Minute Demo Video Script (Target: 2:35)
+# ZeroDrop v4.0 APEX — Local Demo Script
 
-> **Rule Check:** Must be under 3:00 minutes, publicly visible (YouTube / Vimeo), no copyrighted music, showing the build running end-to-end.
+> **Status:** This is a proposed longer storyboard; a separate short synthetic walkthrough was recorded locally for private review. The repository snapshot was tested with the local suite/emulator only and has not been deployed to AWS. No AWS console footage, live AWS verification, public video upload, or hackathon submission is claimed. Any cloud-dependent scene below must wait for a separately deployed and verified environment.
 
----
+### `0:00–0:22` | The problem and local app
 
-### `0:00 – 0:22` | The Hook & 1-Click Auto-Demo + Pipeline Bar
-* **Visual:** Open `https://<your-cloudfront-url>` on Tab 1 (`ZeroDrop v3.0 ULTRA-PRO`), highlight the **Live Serverless Pipeline Bar** + **KMS Key Fingerprint**, and click **▶ Auto-Run Live Security Demo** (or walk through manually).
-* **Voiceover:**
-  > "Hi! I built **ZeroDrop v3** for the *No Pipeline, No Problem* Weekend Challenge. Developers share `.env` secrets over Slack every day—only for link-preview crawlers to burn one-time links, or 20 concurrent requests to trigger a race leak. ZeroDrop solves this end-to-end with Shamir M-of-N Quorum splitting, an instant owner kill switch, and 100% serverless AWS at **$0 idle compute**."
+- **Visual:** Start `python3 local_server.py` and open `http://127.0.0.1:8787`. Introduce the project as a client-side secret-sharing prototype with an AWS SAM design, not a currently live service.
+- **Voiceover:** “ZeroDrop explores safer ways to share short-lived secrets: encrypt in the client, split keys when needed, and make claims atomic. This recording uses the local emulator; the AWS template is not deployed in this repository snapshot.”
 
-### `0:22 – 1:05` | Zero-Knowledge + Shamir 2-of-3 Quorum + 2FA Passphrase + Canary Shield
-* **Visual:**
-  1. Select **2-of-3 Shamir Quorum** + optional **2FA Passphrase** (or **Canary Trap**) → click **Encrypt & Create ZeroDrop**.
-  2. Show the 3 distinct Share URLs (`#d=...&s=1-2-3:...`) + the **Owner Panic Kill Switch** (`kill_token`).
-  3. Open Unlocker Tab → click **🤖 Simulate Slackbot Crawl** → show **403 BOT_SHIELD_BLOCKED** (plus Canary SNS + CloudWatch Alarm metric!) while status stays `READY`.
-  4. Enter a **wrong passphrase** → show **"Checked locally BEFORE calling AWS — secret NOT burned."** Then combine 2 Shamir shares + right passphrase → plaintext decrypts locally!
+### `0:22–1:05` | Client-side crypto and local checks
 
-### `1:05 – 1:45` | Step Functions Break-Glass Approval (`waitForTaskToken`)
-* **Visual:**
-  1. Quick switch to Tab 1 → select **🛡️ Break-Glass Approval** (Judge Sandbox checked) → click **Encrypt & Create**.
-  2. Unlocker Tab → click **🛡️ Request Break-Glass Unlock** → show **`PENDING_APPROVAL`** alongside the **AWS Step Functions Console execution graph paused in blue on `NotifyAndAwaitApproval`**.
-  3. Click **Open Owner Review Page** → click **✅ Approve Release** → return to Unlocker Tab to see instant plaintext unlock and the Step Functions graph finishing green through **`ParallelApproveShred`** (`DynamoDB` + `S3` + `SNS`).
+- **Visual:** Walk through a local secret creation, Shamir shares, optional passphrase check, and the browser's masked `.env` display. Show the local bot/canary behavior where available.
+- **Voiceover:** “The browser performs encryption and checks before the claim request. These are local application behaviors; the screen does not demonstrate a live AWS environment.”
 
-### `1:45 – 2:20` | Dual-Mode Race Lab & Hash-Chained KMS Tamper Cascade
-* **Visual:**
-  1. Show the **Local 20-Thread DB Race** while `local_server.py` is running to compare the synthetic naive case with the atomic emulator result. On a deployed AWS page, click **🌐 Fire 20 Parallel Browser `fetch()` Requests** only for a deliberate live load test; it creates a real drop and sends 20 API claims.
-  2. Tab 5 (**Hash-Chained KMS Ledger**): show the full chain verifying **ALL VALID** in browser WebCrypto → click **🧪 Flip 1 Char in Entry #1** (cascade fail!) → click **📄 Export Verifiable HTML Cert** + demonstrate **☠️ Panic Shred Now** killing an active drop!
+### `1:05–1:45` | Break-glass flow in the emulator
 
-### `2:20 – 2:38` | CLI, CloudWatch Ops Dashboard & 1-Command Deploy
-* **Visual:** Flash `cli/zerodrop_cli.py` pushing `.env` from terminal + **CloudWatch `ZeroDropOpsDashboard`** + `./deploy.sh`.
-* **Voiceover:**
-  > "Everything—CloudFront, OAC S3, HTTP API, Python 3.13 arm64 Lambdas, Step Functions SDK shred, DynamoDB TTL, KMS P-256, SNS, and a CloudWatch Ops Dashboard—deploys from one SAM template with `./deploy.sh` and scales to zero. Thanks for watching!"
+- **Visual:** Request a break-glass unlock, then approve it through the local review flow. Do not show an AWS Step Functions console execution graph.
+- **Voiceover:** “The local emulator simulates the approval and callback flow. A live Step Functions execution has not been run for this snapshot.”
+
+### `1:45–2:20` | Race test and audit receipt
+
+- **Visual:** Show the local 20-thread in-memory race test and verify the local hash-chained receipt. If displaying the telemetry panel, describe it as polled aggregate counters only; do not call it an event stream or live AWS SOC.
+- **Voiceover:** “The concurrency test here targets the in-memory emulator. The local signing path is not AWS KMS, and the telemetry API returns aggregate counters rather than individual events.”
+
+### `2:20–2:38` | CLI and what remains unverified
+
+- **Visual:** Run the CLI against `http://127.0.0.1:8787`. Do not present CloudWatch dashboards, CloudFront, KMS, or live AWS results as completed work.
+- **Voiceover:** “The repository includes a SAM template and deployment script for a separate AWS deployment. Neither deployment nor live verification is part of this demo snapshot.”
+
+## Optional future cloud segment
+
+Only after an actual AWS deployment and a successful run of `scripts/verify_live_aws.py`, a later recording may show the live CloudFront/API behavior and the AWS services that are provisioned. Clearly distinguish that evidence from the local emulator, and do not claim an event stream: the current SOC endpoint exposes aggregate counters only.

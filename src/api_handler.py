@@ -666,7 +666,7 @@ def _handle_claim_drop(drop_id: str, event: Dict[str, Any], headers: Dict[str, s
             "mode": "approval",
             "claim_secret": claim_secret,
             "execution_arn": execution_arn,
-            "message": "Step Functions workflow paused at $0 idle cost awaiting owner approval.",
+            "message": "Break-glass approval request is waiting for an owner decision.",
         },
     )
 
@@ -686,12 +686,15 @@ def _handle_collect_approved(drop_id: str, event: Dict[str, Any], headers: Dict[
 
     claim_secret_hash = hashlib.sha256(claim_secret.encode("utf-8")).hexdigest()
     now_iso = utc_now_iso()
+    now_epoch = utc_epoch()
     ip_hash, _ = _get_client_meta(event, headers)
     table = aws_table()
 
     peek = table.get_item(Key={"drop_id": drop_id}).get("Item")
     if not peek:
         return _response(404, {"error": "NOT_FOUND"})
+    if int(peek.get("ttl_epoch") or 0) <= now_epoch:
+        return _response(410, {"error": "EXPIRED", "message": "This drop's configured lifetime has elapsed."})
     peek_has_file = bool(peek.get("has_file", False))
     if not peek_has_file and not peek.get("ciphertext_b64"):
         return _response(410, {"error": "ALREADY_SHREDDED", "message": "Grace period elapsed and Step Functions already shredded this secret."})
@@ -706,18 +709,21 @@ def _handle_collect_approved(drop_id: str, event: Dict[str, Any], headers: Dict[
         ":shredded": "PENDING_FILE_SHRED" if peek_has_file else "SHREDDED",
         ":csh": claim_secret_hash,
         ":now": now_iso,
+        ":now_epoch": now_epoch,
     }
     try:
         res = table.update_item(
             Key={"drop_id": drop_id},
             UpdateExpression=update_expression,
-            ConditionExpression="#st = :approved AND claim_secret_hash = :csh AND attribute_not_exists(burned_at)",
+            ConditionExpression="#st = :approved AND claim_secret_hash = :csh AND attribute_not_exists(burned_at) AND ttl_epoch > :now_epoch",
             ExpressionAttributeNames={"#st": "status"},
             ExpressionAttributeValues=update_values,
             ReturnValues="ALL_OLD",
         )
     except Exception as exc:
         if is_conditional_check_failed(exc):
+            if int(peek.get("ttl_epoch") or 0) <= utc_epoch():
+                return _response(410, {"error": "EXPIRED", "message": "This drop's configured lifetime has elapsed."})
             return _response(403, {"error": "NOT_APPROVED_OR_ALREADY_COLLECTED"})
         raise
 

@@ -3,20 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta property="og:title" content="ZeroDrop v3 — Zero-Knowledge, Quorum-Split, KMS-Chained Secret Escrow" />
-  <meta property="og:description" content="Protected by Bot-Shield, Shamir M-of-N Quorum, DynamoDB Conditional Writes &amp; AWS KMS." />
-  <title>ZeroDrop v3 — Zero-Knowledge • Quorum M-of-N • Break-Glass • KMS Hash-Chained Escrow</title>
+  <meta property="og:title" content="ZeroDrop v4.0 APEX — Client-Side Secret Escrow" />
+  <meta property="og:description" content="Client-side encryption, Shamir sharing, local emulator demo, and an AWS SAM architecture." />
+  <link rel="icon" href="data:," />
+  <title>ZeroDrop v4.0 APEX — Client-Side Secret Escrow</title>
   <style>
     :root {
-      --bg: #070b12;
-      --surface: #101725;
-      --surface-2: #162033;
-      --border: #24324d;
-      --text: #e6edf7;
-      --muted: #93a4c3;
-      --accent: #38bdf8;
-      --accent-2: #818cf8;
-      --green: #22c55e;
+      --bg: #080c14;
+      --surface: #101827;
+      --surface-2: #172237;
+      --border: #2a3b56;
+      --text: #edf4ff;
+      --muted: #a1b1cd;
+      --accent: #51c7f5;
+      --accent-2: #8b8cff;
+      --green: #34d399;
       --green-bg: rgba(34, 197, 94, 0.14);
       --red: #ef4444;
       --red-bg: rgba(239, 68, 68, 0.14);
@@ -30,42 +31,47 @@
     body {
       margin: 0;
       background:
-        radial-gradient(circle at 85% 0%, rgba(56, 189, 248, 0.11) 0%, transparent 45%),
-        radial-gradient(circle at 15% 15%, rgba(129, 140, 248, 0.08) 0%, transparent 40%),
+        radial-gradient(ellipse at 84% -8%, rgba(81, 199, 245, 0.16) 0%, transparent 43%),
+        radial-gradient(ellipse at 5% 18%, rgba(139, 140, 255, 0.1) 0%, transparent 38%),
+        radial-gradient(ellipse at 55% 100%, rgba(52, 211, 153, 0.035) 0%, transparent 48%),
         var(--bg);
       color: var(--text);
       font-family: var(--sans);
-      line-height: 1.5;
+      line-height: 1.55;
+      font-size: 15px;
       min-height: 100vh;
     }
-    .container { max-width: 1120px; margin: 0 auto; padding: 18px 18px 60px; }
+    .container { max-width: 1180px; margin: 0 auto; padding: 22px 22px 64px; }
     header {
       display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-      gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--border);
+      gap: 16px; padding: 2px 0 18px; border-bottom: 1px solid rgba(120, 151, 190, 0.2);
     }
-    .brand { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+    .brand { display: flex; align-items: center; gap: 14px; cursor: pointer; border: 0; background: transparent; color: inherit; padding: 0; text-align: left; font: inherit; }
     .logo {
-      width: 42px; height: 42px; border-radius: 11px;
-      background: linear-gradient(135deg, var(--accent), var(--accent-2));
-      display: grid; place-items: center; font-weight: 800; font-size: 18px; color: #08101c;
-      box-shadow: 0 0 24px rgba(56, 189, 248, 0.28);
+      width: 48px; height: 48px; border-radius: 15px;
+      background: linear-gradient(145deg, #78e3f7 0%, var(--accent) 42%, var(--accent-2) 100%);
+      display: grid; place-items: center; font-weight: 900; font-size: 20px; color: #07111e;
+      box-shadow: 0 8px 28px rgba(81, 199, 245, 0.22), inset 0 1px 0 rgba(255,255,255,0.48);
+      border: 1px solid rgba(255,255,255,0.22);
     }
-    .brand h1 { margin: 0; font-size: 1.25rem; letter-spacing: -0.02em; }
-    .brand small { display: block; color: var(--muted); font-size: 0.77rem; }
-    .pill-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .brand h1 { margin: 0; font-size: 1.42rem; line-height: 1.2; letter-spacing: -0.035em; }
+    .brand small { display: block; color: var(--muted); font-size: 0.8rem; margin-top: 4px; letter-spacing: 0.01em; }
+    .pill-row { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; justify-content: flex-end; }
     .pill {
-      font-size: 0.72rem; padding: 4px 10px; border-radius: 999px;
-      border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+      font-size: 0.74rem; font-weight: 650; padding: 6px 11px; border-radius: 999px;
+      border: 1px solid rgba(120, 151, 190, 0.28); background: rgba(16, 24, 39, 0.88); color: var(--muted);
     }
     .pill.ok { border-color: rgba(34, 197, 94, 0.45); color: #86efac; background: var(--green-bg); }
+    .pill.warn { border-color: rgba(245, 158, 11, 0.55); color: #fde68a; background: var(--amber-bg); }
+    .pill.bad { border-color: rgba(239, 68, 68, 0.55); color: #fecaca; background: var(--red-bg); }
     .pill.mono { font-family: var(--mono); }
 
-    /* Live Pipeline Flow Bar */
+    /* Illustrative request-flow bar */
     .pipeline-bar {
       display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;
-      margin: 14px 0 10px; padding: 10px 14px; border-radius: 12px;
-      background: rgba(16, 23, 37, 0.92); border: 1px solid var(--border);
-      font-size: 0.75rem;
+      margin: 16px 0 12px; padding: 12px 15px; border-radius: 14px;
+      background: linear-gradient(110deg, rgba(18, 29, 47, 0.95), rgba(13, 20, 33, 0.92)); border: 1px solid rgba(120, 151, 190, 0.22);
+      font-size: 0.78rem; box-shadow: 0 8px 24px rgba(0,0,0,0.16);
     }
     .pipe-nodes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
     .pipe-node {
@@ -81,53 +87,63 @@
     .pipe-node.lit-amber { border-color: var(--amber); color: #fde68a; background: var(--amber-bg); }
     .pipe-node.lit-red { border-color: var(--red); color: #fecaca; background: var(--red-bg); }
     .pipe-arrow { color: #4f6085; font-weight: 700; }
-    .cost-tag { font-family: var(--mono); color: #86efac; font-size: 0.73rem; }
+    .backend-summary { font-family: var(--mono); color: var(--muted); font-size: 0.73rem; }
+    .runtime-notice {
+      margin: 14px 0; padding: 13px 16px; border-radius: 12px;
+      border: 1px solid var(--border); background: linear-gradient(110deg, rgba(18, 28, 45, 0.96), rgba(15, 23, 37, 0.96)); color: var(--text);
+      font-size: 0.88rem; box-shadow: 0 8px 24px rgba(0,0,0,0.14);
+    }
+    .runtime-notice.local { border-color: rgba(245, 158, 11, 0.55); background: linear-gradient(105deg, rgba(120, 76, 12, 0.25), rgba(41, 31, 18, 0.7)); color: #ffe6a1; }
+    .runtime-notice.remote { border-color: rgba(81, 199, 245, 0.5); background: linear-gradient(105deg, rgba(22, 82, 111, 0.28), rgba(17, 29, 45, 0.74)); color: #c3efff; }
+    .runtime-notice.offline { border-color: rgba(239, 68, 68, 0.58); background: linear-gradient(105deg, rgba(113, 29, 37, 0.3), rgba(38, 21, 30, 0.75)); color: #ffd2d2; }
 
     .tour-banner {
       display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
-      margin: 8px 0 14px; padding: 10px 14px; border-radius: 11px;
-      background: linear-gradient(90deg, rgba(56, 189, 248, 0.1), rgba(129, 140, 248, 0.08));
-      border: 1px solid rgba(56, 189, 248, 0.35); font-size: 0.83rem;
+      margin: 10px 0 16px; padding: 12px 15px; border-radius: 13px;
+      background: linear-gradient(100deg, rgba(42, 115, 154, 0.17), rgba(83, 76, 155, 0.16));
+      border: 1px solid rgba(104, 181, 231, 0.36); font-size: 0.86rem; box-shadow: 0 8px 26px rgba(0,0,0,0.12);
     }
 
-    nav.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 18px; }
+    nav.tabs { display: flex; flex-wrap: nowrap; gap: 8px; margin: 14px 0 20px; overflow-x: auto; padding: 3px 2px 9px; scrollbar-color: var(--border) transparent; }
     .tab-btn {
-      background: var(--surface); color: var(--muted); border: 1px solid var(--border);
-      padding: 9px 14px; border-radius: 10px; font-size: 0.85rem; font-weight: 600;
-      cursor: pointer; transition: all 0.15s ease;
+      background: rgba(16, 24, 39, 0.86); color: var(--muted); border: 1px solid rgba(120, 151, 190, 0.25);
+      padding: 10px 15px; min-height: 42px; border-radius: 11px; font-size: 0.86rem; font-weight: 650;
+      cursor: pointer; transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease; white-space: nowrap;
     }
-    .tab-btn:hover { border-color: var(--accent); color: var(--text); }
+    .tab-btn:hover { transform: translateY(-1px); border-color: var(--accent); color: var(--text); }
     .tab-btn.active {
-      background: linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(129, 140, 248, 0.18));
-      border-color: var(--accent); color: #fff;
+      background: linear-gradient(135deg, rgba(81, 199, 245, 0.2), rgba(139, 140, 255, 0.2));
+      border-color: rgba(81, 199, 245, 0.8); color: #fff; box-shadow: 0 5px 18px rgba(42, 144, 192, 0.15), inset 0 1px 0 rgba(255,255,255,0.08);
     }
+    :focus-visible { outline: 3px solid #bae6fd; outline-offset: 3px; }
+    .btn:focus-visible, .tab-btn:focus-visible, .brand:focus-visible, .radio-card:focus-within { outline: 3px solid #bae6fd; outline-offset: 3px; }
     .panel { display: none; }
     .panel.active { display: block; }
     .card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 14px; padding: 20px; margin-bottom: 16px;
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+      background: linear-gradient(155deg, rgba(20, 30, 48, 0.97), rgba(14, 21, 34, 0.99)); border: 1px solid rgba(120, 151, 190, 0.24);
+      border-radius: 16px; padding: 22px; margin-bottom: 18px;
+      box-shadow: 0 16px 38px rgba(0, 0, 0, 0.27), inset 0 1px 0 rgba(255,255,255,0.025);
     }
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
     @media (max-width: 820px) { .grid-2 { grid-template-columns: 1fr; } }
-    h2 { margin: 0 0 8px; font-size: 1.1rem; }
-    h3 { margin: 0 0 8px; font-size: 0.95rem; color: var(--accent); }
-    p.sub { margin: 0 0 14px; color: var(--muted); font-size: 0.87rem; }
-    label { display: block; font-size: 0.81rem; font-weight: 600; color: var(--muted); margin: 11px 0 5px; }
+    h2 { margin: 0 0 9px; font-size: 1.18rem; letter-spacing: -0.02em; }
+    h3 { margin: 0 0 9px; font-size: 0.98rem; color: #8ddcf8; letter-spacing: 0.005em; }
+    p.sub { margin: 0 0 16px; color: var(--muted); font-size: 0.91rem; line-height: 1.6; }
+    label { display: block; font-size: 0.84rem; font-weight: 650; color: #bdcbe0; margin: 13px 0 6px; }
     input[type="text"], input[type="password"], input[type="number"], select, textarea {
-      width: 100%; background: var(--surface-2); color: var(--text);
-      border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px;
-      font-family: inherit; font-size: 0.89rem; outline: none;
+      width: 100%; background: rgba(8, 14, 24, 0.72); color: var(--text);
+      border: 1px solid rgba(120, 151, 190, 0.3); border-radius: 11px; padding: 10px 13px;
+      font-family: inherit; font-size: 0.92rem; outline: none; transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
     }
-    textarea { font-family: var(--mono); font-size: 0.82rem; min-height: 102px; resize: vertical; }
-    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    textarea { font-family: var(--mono); font-size: 0.84rem; min-height: 112px; resize: vertical; }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(81, 199, 245, 0.13); background: #0c1625; }
     .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .btn {
       background: linear-gradient(135deg, var(--accent), var(--accent-2));
-      color: #06101f; font-weight: 700; border: none; border-radius: 10px;
-      padding: 10px 15px; font-size: 0.87rem; cursor: pointer; transition: opacity 0.15s;
+      color: #06101f; font-weight: 750; border: none; border-radius: 11px;
+      padding: 11px 16px; min-height: 40px; font-size: 0.89rem; cursor: pointer; transition: transform 0.16s ease, filter 0.16s ease, box-shadow 0.16s ease;
     }
-    .btn:hover { opacity: 0.92; }
+    .btn:hover { filter: brightness(1.07); transform: translateY(-1px); box-shadow: 0 7px 18px rgba(61, 159, 203, 0.18); }
     .btn:disabled { opacity: 0.45; cursor: not-allowed; }
     .btn.secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
     .btn.danger { background: var(--red); color: #fff; }
@@ -137,12 +153,16 @@
     .radio-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px; }
     @media (max-width: 600px) { .radio-cards { grid-template-columns: 1fr; } }
     .radio-card {
-      border: 1px solid var(--border); background: var(--surface-2); border-radius: 12px;
-      padding: 11px; cursor: pointer; transition: border-color 0.15s;
+      border: 1px solid rgba(120, 151, 190, 0.25); background: linear-gradient(145deg, rgba(23, 34, 55, 0.88), rgba(14, 22, 36, 0.92)); border-radius: 13px;
+      padding: 13px; cursor: pointer; transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease; display: flex; gap: 11px; align-items: flex-start;
     }
-    .radio-card.selected { border-color: var(--accent); background: rgba(56, 189, 248, 0.08); }
+    .radio-card:hover { transform: translateY(-1px); border-color: rgba(81, 199, 245, 0.65); }
+    .radio-card.selected { border-color: var(--accent); background: linear-gradient(135deg, rgba(81, 199, 245, 0.14), rgba(139, 140, 255, 0.09)); box-shadow: inset 0 0 0 1px rgba(81, 199, 245, 0.16), 0 8px 20px rgba(21, 103, 142, 0.1); }
+    .radio-card input { margin: 3px 0 0; accent-color: var(--accent); flex: 0 0 auto; }
     .radio-card strong { display: block; font-size: 0.9rem; }
     .radio-card span { font-size: 0.76rem; color: var(--muted); }
+    .radio-card-copy { display: block; }
+    .mode-label { margin: 11px 0 5px; font-size: 0.81rem; font-weight: 600; color: var(--muted); }
     .mono-box {
       background: #070a11; border: 1px solid var(--border); border-radius: 10px;
       padding: 10px 11px; font-family: var(--mono); font-size: 0.78rem;
@@ -189,10 +209,11 @@
     .soc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
     @media (max-width: 700px) { .soc-grid { grid-template-columns: repeat(2, 1fr); } }
     .soc-kpi {
-      background: var(--surface-2); border: 1px solid var(--border); border-radius: 11px; padding: 12px;
+      background: linear-gradient(150deg, rgba(23, 34, 55, 0.95), rgba(14, 22, 36, 0.96)); border: 1px solid rgba(120, 151, 190, 0.24); border-radius: 13px; padding: 14px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.025);
     }
-    .soc-kpi .num { font-size: 1.45rem; font-weight: 800; font-family: var(--mono); color: var(--accent); }
-    .soc-kpi .lbl { font-size: 0.76rem; color: var(--muted); }
+    .soc-kpi .num { font-size: 1.6rem; line-height: 1.2; font-weight: 800; font-family: var(--mono); color: #76dafa; }
+    .soc-kpi .lbl { font-size: 0.8rem; color: var(--muted); margin-top: 3px; }
     .env-row {
       display: flex; align-items: center; gap: 8px; padding: 6px 9px; margin-top: 6px;
       background: #070a11; border: 1px solid var(--border); border-radius: 8px; font-family: var(--mono); font-size: 0.76rem;
@@ -205,81 +226,102 @@
       background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4); font-size: 0.79rem;
     }
     .footer-note { text-align: center; color: var(--muted); font-size: 0.78rem; margin-top: 24px; }
+    .help-note { color: var(--muted); font-size: 0.78rem; margin: 6px 0 0; }
+    @media (max-width: 560px) {
+      .container { padding: 14px 14px 44px; }
+      header { align-items: flex-start; }
+      .brand h1 { font-size: 1.22rem; }
+      .brand small { max-width: 300px; font-size: 0.75rem; }
+      .logo { width: 42px; height: 42px; border-radius: 13px; }
+      .card { padding: 16px; border-radius: 14px; }
+      .pill-row { width: 100%; justify-content: flex-start; }
+      .runtime-notice { font-size: 0.82rem; }
+      .tour-banner { align-items: flex-start; }
+      .kv { grid-template-columns: 1fr; gap: 2px; }
+      .kv .v { margin-bottom: 7px; }
+      .row > input[type="text"] { width: 100% !important; max-width: none !important; }
+      .badge-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    }
   </style>
 </head>
 <body>
 <div class="container">
   <header>
-    <div class="brand" onclick="switchTab('create')">
+    <button class="brand" type="button" onclick="switchTab('create')" aria-label="Return to the create tab">
       <div class="logo">ZD</div>
       <div>
         <h1>ZeroDrop <span style="font-size:0.74rem; color:var(--accent); font-weight:700;">v4.0 APEX</span></h1>
-        <small>Zero-Knowledge • Shamir M-of-N • Panic Kill Switch • Live AWS SOC • KMS Hash-Chain</small>
+        <small>Client-side crypto • Shamir M-of-N • Local emulator • AWS SAM design</small>
       </div>
-    </div>
+    </button>
     <div class="pill-row">
-      <span id="env-pill" class="pill">Checking AWS backend...</span>
-      <span id="kms-pill" class="pill mono">KMS ECDSA P-256</span>
-      <span class="pill ok">Scale-to-Zero ($0.00 Idle)</span>
+      <span id="env-pill" class="pill" role="status">Checking backend…</span>
+      <span id="kms-pill" class="pill mono">Checking signer…</span>
     </div>
   </header>
+  <div id="runtime-notice" class="runtime-notice" role="status" aria-live="polite">Checking which backend is connected. Use synthetic data in this demo.</div>
 
-  <div class="pipeline-bar">
+  <div class="pipeline-bar" aria-label="Illustrative request flow; services depend on the connected backend">
     <div class="pipe-nodes">
-      <span id="pn-crypto" class="pipe-node">1. AES/PBKDF2/Shamir</span>
+      <span id="pn-crypto" class="pipe-node">1. Browser crypto</span>
       <span class="pipe-arrow">→</span>
-      <span id="pn-edge" class="pipe-node">2. CloudFront / Bot Shield</span>
+      <span id="pn-edge" class="pipe-node">2. API / bot checks</span>
       <span class="pipe-arrow">→</span>
-      <span id="pn-ddb" class="pipe-node">3. DynamoDB Atomic</span>
+      <span id="pn-ddb" class="pipe-node">3. Conditional claim</span>
       <span class="pipe-arrow">→</span>
-      <span id="pn-sfn" class="pipe-node">4. Step Functions / SNS</span>
+      <span id="pn-sfn" class="pipe-node">4. Approval workflow</span>
       <span class="pipe-arrow">→</span>
-      <span id="pn-kms" class="pipe-node">5. KMS P-256 Chain</span>
+      <span id="pn-kms" class="pipe-node">5. P-256 audit signer</span>
     </div>
-    <span id="telemetry-cost" class="cost-tag">Idle: $0.000000 | KMS FP: <span id="hdr-fp">...</span></span>
+    <span id="backend-summary" class="backend-summary">Backend and signer details load from the health endpoint.</span>
   </div>
-
   <div class="tour-banner">
     <div>
-      <strong>⚡ Judge 15-Second Live Proof:</strong>
-      <span id="tour-status">Watch real WebCrypto encrypt → Slackbot 403 block → Atomic burn → KMS Hash-Chain verify execute live.</span>
+      <strong>Guided local demo · synthetic data</strong>
+      <span id="tour-status" aria-live="polite">Runs only when the local emulator is connected: create → bot-check simulation → one-time claim → receipt verification.</span>
     </div>
-    <button id="auto-demo-btn" class="btn sm" onclick="runGuidedJudgeDemo()">▶ Auto-Run Live Security Demo</button>
+    <button id="auto-demo-btn" class="btn sm" onclick="runGuidedJudgeDemo()" disabled>▶ Run local demo</button>
   </div>
 
-  <nav class="tabs">
-    <button class="tab-btn active" data-tab="create" onclick="switchTab('create')">1. Create &amp; Split</button>
-    <button class="tab-btn" data-tab="unlock" onclick="switchTab('unlock')">2. Unlocker &amp; Quorum</button>
-    <button class="tab-btn" data-tab="review" onclick="switchTab('review')">3. Owner Approval</button>
-    <button class="tab-btn" data-tab="racelab" onclick="switchTab('racelab')">4. Dual Race Lab</button>
-    <button class="tab-btn" data-tab="receipt" onclick="switchTab('receipt')">5. KMS Ledger &amp; Cert</button>
-    <button class="tab-btn" data-tab="soc" onclick="switchTab('soc')">6. Live AWS SOC</button>
+  <nav class="tabs" role="tablist" aria-label="ZeroDrop sections">
+    <button id="tab-btn-create" class="tab-btn active" type="button" role="tab" aria-selected="true" aria-controls="tab-create" data-tab="create" onclick="switchTab('create')">1. Create &amp; Split</button>
+    <button id="tab-btn-unlock" class="tab-btn" type="button" role="tab" aria-selected="false" aria-controls="tab-unlock" tabindex="-1" data-tab="unlock" onclick="switchTab('unlock')">2. Unlocker &amp; Quorum</button>
+    <button id="tab-btn-review" class="tab-btn" type="button" role="tab" aria-selected="false" aria-controls="tab-review" tabindex="-1" data-tab="review" onclick="switchTab('review')">3. Owner Approval</button>
+    <button id="tab-btn-racelab" class="tab-btn" type="button" role="tab" aria-selected="false" aria-controls="tab-racelab" tabindex="-1" data-tab="racelab" onclick="switchTab('racelab')">4. Race Lab</button>
+    <button id="tab-btn-receipt" class="tab-btn" type="button" role="tab" aria-selected="false" aria-controls="tab-receipt" tabindex="-1" data-tab="receipt" onclick="switchTab('receipt')">5. Audit &amp; Certificate</button>
+    <button id="tab-btn-soc" class="tab-btn" type="button" role="tab" aria-selected="false" aria-controls="tab-soc" tabindex="-1" data-tab="soc" onclick="switchTab('soc')">6. Telemetry</button>
   </nav>
 
   <!-- TAB 1: CREATE -->
-  <section id="tab-create" class="panel active">
+  <section id="tab-create" class="panel active" role="tabpanel" aria-labelledby="tab-btn-create" tabindex="0" aria-hidden="false">
     <div class="grid-2">
       <div class="card">
         <div class="row" style="justify-content: space-between;">
           <h2>Encrypt in Browser (AES-256-GCM)</h2>
           <div class="row">
-            <button class="btn secondary sm" onclick="loadSampleEnv()">Sample .env</button>
+            <button class="btn secondary sm" type="button" onclick="loadSampleEnv()">Load synthetic sample</button>
             <button class="btn amber sm" onclick="loadCanaryPreset()">🕵️ Canary Trap</button>
           </div>
         </div>
-        <p class="sub">Encryption &amp; Shamir splitting happen purely in-browser. Keys stay in <code>#fragment</code> and never hit AWS.</p>
+        <p class="sub">Encryption and Shamir splitting happen in your browser. Only ciphertext and non-secret metadata are sent to the connected backend; use synthetic data here, never production credentials.</p>
 
         <label for="drop-label">Secret Label (non-sensitive metadata)</label>
         <input id="drop-label" type="text" placeholder="e.g. Prod Root Recovery Key — Break-Glass" maxlength="120" />
 
         <label for="secret-text">Secret Text / .env / Private Key</label>
-        <textarea id="secret-text" oninput="scanSecretPreflight()" placeholder="Paste API keys, .env variables, or temporary credentials here..."></textarea>
-        <div id="preflight-box" class="alert hidden" style="margin-top:8px; padding:9px 12px; font-size:0.79rem;"></div>
+        <textarea id="secret-text" spellcheck="false" autocomplete="off" oninput="scanSecretPreflight()" placeholder="Paste synthetic demo values here; do not use real credentials in this demo..."></textarea>
+        <div id="preflight-box" class="alert hidden" role="status" aria-live="polite" style="margin-top:8px; padding:9px 12px; font-size:0.79rem;"></div>
 
         <div class="grid-2" style="gap: 10px;">
           <div>
-            <label for="secret-file">Attach Encrypted File (≤ 25 MB → S3) <a href="javascript:void(0)" onclick="document.getElementById('secret-file').value=''" style="color:var(--accent); font-weight:400; margin-left:6px;">[Clear]</a></label>
-            <input id="secret-file" type="file" />
+            <label for="secret-file">Attach encrypted file (≤ 25 MB)</label>
+            <div class="row">
+              <input id="secret-file" type="file" />
+              <button class="btn secondary sm" type="button" onclick="document.getElementById('secret-file').value=''">Clear file</button>
+            </div>
           </div>
           <div>
             <label for="drop-passphrase">Optional 2FA Passphrase (PBKDF2 120k)</label>
@@ -287,16 +329,16 @@
           </div>
         </div>
 
-        <label>Delivery &amp; Approval Mode</label>
-        <div class="radio-cards">
-          <div id="mode-fast-card" class="radio-card selected" onclick="selectMode('fast')">
-            <strong>⚡ Fast Atomic Burn</strong>
-            <span>1-time DynamoDB ConditionExpression. 1st request wins; 410 Gone for all others.</span>
-          </div>
-          <div id="mode-approval-card" class="radio-card" onclick="selectMode('approval')">
-            <strong>🛡️ Break-Glass Approval</strong>
-            <span>Step Functions pauses via <code>waitForTaskToken</code> at $0 until owner approves.</span>
-          </div>
+        <p class="mode-label">Delivery &amp; approval mode</p>
+        <div class="radio-cards" role="radiogroup" aria-label="Delivery and approval mode">
+          <label id="mode-fast-card" class="radio-card selected">
+            <input id="mode-fast-radio" type="radio" name="delivery-mode" value="fast" checked onchange="selectMode('fast')" />
+            <span class="radio-card-copy"><strong>⚡ Fast atomic claim</strong><span>One caller succeeds; later claims are rejected. Local mode simulates the storage update.</span></span>
+          </label>
+          <label id="mode-approval-card" class="radio-card">
+            <input id="mode-approval-radio" type="radio" name="delivery-mode" value="approval" onchange="selectMode('approval')" />
+            <span class="radio-card-copy"><strong>🛡️ Owner approval</strong><span>Pause for an owner decision; local mode simulates the workflow, AWS uses Step Functions.</span></span>
+          </label>
         </div>
 
         <div class="grid-2" style="gap: 10px; margin-top: 4px;">
@@ -307,32 +349,34 @@
               <option value="2of3">2-of-3 Quorum Shares (Need any 2 engineers)</option>
               <option value="3of5">3-of-5 Quorum Shares (High-Security Recovery)</option>
             </select>
+            <p class="help-note">1-of-1 keeps the key in one link. M-of-N requires M distinct shares to unlock.</p>
           </div>
           <div>
-            <label for="ttl-select">Auto-Expiry (DynamoDB TTL)</label>
+            <label for="ttl-select">Drop expiry (connected backend TTL)</label>
             <select id="ttl-select">
               <option value="15">15 minutes</option>
               <option value="60" selected>1 hour</option>
               <option value="1440">24 hours</option>
               <option value="10080">7 days</option>
             </select>
+            <p class="help-note">Drop expiry is separate from the AWS template’s 7-day S3 file cleanup backstop.</p>
           </div>
         </div>
 
         <label class="checkbox-line">
           <input id="canary-alert-chk" type="checkbox" />
-          <span><strong>🍯 Canary Tripwire Alert:</strong> Fire Amazon SNS alert + CloudWatch Alarm if probed or unlocked</span>
+          <span><strong>🍯 Canary tripwire:</strong> Flag a decoy attempt; SNS/CloudWatch alerts are defined in the AWS template.</span>
         </label>
 
         <label class="checkbox-line">
           <input id="demo-inbox-chk" type="checkbox" checked />
-          <span><strong>🧪 Judge Demo Sandbox:</strong> Show simulated SNS Owner Inbox on-screen for instant testing</span>
+          <span><strong>🧪 On-screen demo inbox:</strong> Show a simulated owner-review link for local testing.</span>
         </label>
 
         <div class="row" style="margin-top: 16px;">
-          <button id="create-btn" class="btn" onclick="createDrop()">🔒 Encrypt &amp; Create ZeroDrop</button>
+          <button id="create-btn" class="btn" type="button" onclick="createDrop()">🔒 Encrypt &amp; create drop</button>
         </div>
-        <div id="create-error" class="alert err hidden"></div>
+        <div id="create-error" class="alert err hidden" role="alert" aria-live="assertive"></div>
       </div>
 
       <div class="card">
@@ -340,12 +384,12 @@
         <p class="sub">Share on Slack, WhatsApp, or Discord — preview crawlers cannot read <code>#k=</code>/<code>#s=</code> or burn the drop.</p>
 
         <div id="create-empty" class="alert">
-          Fill out a secret or click <strong>"Sample .env"</strong> / <strong>"🕵️ Canary Trap"</strong> to generate a drop.
+          Fill out a secret or click <strong>"Load synthetic sample"</strong> / <strong>"🕵️ Canary Trap"</strong> to generate a drop.
         </div>
 
         <div id="create-result" class="hidden">
           <div class="alert ok">
-            <strong>Encrypted locally &amp; KMS Genesis entry anchored!</strong> Zero plaintext or key touched AWS.
+            <strong>Encrypted in browser; audit entry recorded by the connected signer.</strong> Plaintext and key remain in the browser.
           </div>
 
           <div id="single-share-wrap">
@@ -354,7 +398,7 @@
             <div class="row" style="margin-top: 10px;">
               <button id="copy-share-btn" class="btn sm" onclick="copyShareUrl(this)">📋 Copy Share Link</button>
               <button class="btn secondary sm" onclick="openGeneratedDrop()">🔓 Open in Unlocker Tab</button>
-              <button class="btn secondary sm" onclick="inspectCreatedChain()">🔗 View KMS Ledger</button>
+              <button class="btn secondary sm" onclick="inspectCreatedChain()">🔗 View signed audit ledger</button>
             </div>
           </div>
 
@@ -363,7 +407,7 @@
             <div id="quorum-shares-list"></div>
             <div class="row" style="margin-top: 10px;">
               <button class="btn sm" onclick="openQuorumInUnlocker()">🔓 Test Quorum Unlock (Open Share #1)</button>
-              <button class="btn secondary sm" onclick="inspectCreatedChain()">🔗 View KMS Ledger</button>
+              <button class="btn secondary sm" onclick="inspectCreatedChain()">🔗 View signed audit ledger</button>
             </div>
           </div>
 
@@ -371,15 +415,16 @@
             <div class="row" style="justify-content: space-between;">
               <div>
                 <strong style="color:#fca5a5;">☠️ Instant Owner Panic Kill Switch</strong><br />
-                <span style="font-size:0.78rem; color:var(--muted);">Sent to the wrong channel? Vaporize ciphertext, S3 &amp; SFN immediately.</span>
+                <span style="font-size:0.78rem; color:var(--muted);">Keep this token separate from the share link. A shred request removes server-side ciphertext and any attached file.</span>
               </div>
               <button id="panic-shred-btn" class="btn danger sm" onclick="panicShredCreated()">☠️ Panic Shred Now</button>
             </div>
             <div class="mono-box" style="margin-top:8px; font-size:0.73rem;">Kill Token: <span id="res-kill-token"></span></div>
-            <div id="panic-shred-status" class="alert hidden" style="margin-top:8px;"></div>
+            <p class="help-note">Do not send the kill token with the share link. Store it securely so you can revoke this drop if needed.</p>
+            <div id="panic-shred-status" class="alert hidden" role="status" aria-live="polite" style="margin-top:8px;"></div>
           </div>
 
-          <label style="margin-top: 12px;">Client Crypto &amp; KMS Telemetry</label>
+          <label style="margin-top: 12px;">Client crypto &amp; audit metadata</label>
           <div class="kv">
             <div class="k">Drop ID</div><div id="res-drop-id" class="v"></div>
             <div class="k">Mode</div><div id="res-mode" class="v"></div>
@@ -394,16 +439,16 @@
   </section>
 
   <!-- TAB 2: UNLOCK / RECEIVE -->
-  <section id="tab-unlock" class="panel">
+  <section id="tab-unlock" class="panel" role="tabpanel" aria-labelledby="tab-btn-unlock" tabindex="0" aria-hidden="true">
     <div class="card">
       <div class="row" style="justify-content: space-between;">
-        <h2>Bot-Proof Unlocker &amp; Shamir Quorum</h2>
+          <h2>Share unlocker &amp; Shamir quorum</h2>
         <div class="row">
           <input id="manual-drop-url" type="text" placeholder="Paste Drop ID or #d=... URL" style="width: 280px;" />
           <button class="btn secondary sm" onclick="loadManualDrop()">Load</button>
         </div>
       </div>
-      <p class="sub">Crawlers only load this static HTML shell. Quorum shares are combined locally via GF(256) Lagrange interpolation before unlock.</p>
+      <p class="sub">Share keys remain in the URL fragment and quorum shares are combined in the browser before a claim is sent to the connected backend.</p>
 
       <div id="unlock-empty" class="alert">
         Open a <code>#d=...&amp;k=...</code> (or <code>#d=...&amp;s=...</code> Quorum) link, or create a drop in Tab 1 first.
@@ -421,7 +466,7 @@
               <div class="k">Attachment</div><div id="u-file" class="v"></div>
               <div class="k">Key / Quorum</div><div id="u-pass-req" class="v"></div>
               <div class="k">Bots Blocked</div><div id="u-bots" class="v"></div>
-              <div class="k">KMS Audit Events</div><div id="u-chain-len" class="v"></div>
+              <div class="k">Signed audit entries</div><div id="u-chain-len" class="v"></div>
             </div>
 
             <div id="unlock-quorum-box" class="hidden" style="margin-top: 12px;">
@@ -430,38 +475,38 @@
             </div>
 
             <div id="unlock-passphrase-box" class="hidden" style="margin-top: 12px;">
-              <label for="unlock-passphrase-input">🔑 2FA Passphrase Required (Verified Locally Before Burn!)</label>
-              <input id="unlock-passphrase-input" type="password" placeholder="Enter out-of-band passphrase" />
+              <label for="unlock-passphrase-input">🔑 Passphrase (checked in this browser before claim)</label>
+              <input id="unlock-passphrase-input" type="password" autocomplete="off" placeholder="Enter out-of-band passphrase" />
             </div>
 
             <div class="row" style="margin-top: 16px;">
               <button id="unlock-btn" class="btn" onclick="claimDrop()">🔓 Unlock &amp; Burn Secret</button>
               <button class="btn secondary sm" onclick="simulateBotCrawl()">🤖 Simulate Slackbot Crawl</button>
             </div>
-            <div id="bot-sim-msg" class="alert warn hidden"></div>
-            <div id="pass-err-msg" class="alert err hidden"></div>
+            <div id="bot-sim-msg" class="alert warn hidden" role="status" aria-live="polite"></div>
+            <div id="pass-err-msg" class="alert err hidden" role="alert" aria-live="assertive"></div>
           </div>
 
           <div>
-            <h3>Decrypted Output / Step Functions Live State</h3>
+            <h3>Decrypted output / approval status</h3>
             <div id="unlock-waiting" class="alert warn hidden">
-              <strong>⏳ AWS Step Functions Paused (<code>waitForTaskToken</code>)</strong><br />
-              Execution is waiting at $0 idle compute for owner approval. Polling status automatically...
+              <strong>⏳ Waiting for an owner decision</strong><br />
+              The configured workflow is paused for approval. Status is checked automatically.
               <div id="demo-inbox-box" class="hidden" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(245,158,11,0.35);">
-                <strong>📬 Simulated SNS Owner Inbox (Sandbox Mode):</strong><br />
-                <span style="font-size: 0.82rem;">An approval link was emitted via SNS. Click below to act as the Secret Owner:</span><br />
+                <strong>📬 On-screen demo owner inbox:</strong><br />
+                <span style="font-size: 0.82rem;">Use this simulated review link to act as the owner in the local demo:</span><br />
                 <button class="btn sm success" style="margin-top: 8px;" onclick="openDemoApproval()">🛡️ Open Owner Review Page</button>
               </div>
             </div>
 
-            <div id="unlock-burned-box" class="alert err hidden"></div>
+            <div id="unlock-burned-box" class="alert err hidden" role="alert" aria-live="assertive"></div>
 
             <div id="unlock-plaintext-wrap" class="hidden">
               <div class="alert ok">
-                <strong>✅ Decrypted in Browser &amp; Burned on Server!</strong> Ciphertext has been removed from DynamoDB.
+                <strong>✅ Decrypted in browser; claim completed.</strong> The connected backend reports the one-time claim as complete.
               </div>
               <div id="wipe-bar" class="wipe-bar hidden">
-                <span>⏱️ Screen Auto-Wipe in <strong id="wipe-countdown">60</strong>s (anti-shoulder-surfing)</span>
+                <span>⏱️ Screen clears in <strong id="wipe-countdown">60</strong>s. Clipboard copies may remain.</span>
                 <button class="btn danger sm" onclick="wipeScreenNow()">🔥 Wipe Screen Now</button>
               </div>
               <div id="masked-env-wrap" class="hidden" style="margin-bottom:8px;"></div>
@@ -470,7 +515,7 @@
                 <button id="copy-decrypted-btn" class="btn sm secondary" onclick="copyDecrypted(this)">📋 Copy Plaintext</button>
                 <button id="toggle-raw-btn" class="btn sm secondary hidden" onclick="toggleRawPlaintext()">👁️ Show/Hide Raw</button>
                 <button id="download-file-btn" class="btn sm hidden" onclick="downloadDecryptedFile()">⬇️ Decrypt &amp; Download File + Shred S3</button>
-                <button id="view-receipt-btn" class="btn sm secondary hidden" onclick="jumpToReceipt()">🔗 Verify KMS Audit Chain</button>
+                <button id="view-receipt-btn" class="btn sm secondary hidden" onclick="jumpToReceipt()">🔗 Verify signed audit chain</button>
               </div>
             </div>
           </div>
@@ -480,17 +525,17 @@
   </section>
 
   <!-- TAB 3: OWNER APPROVAL REVIEW -->
-  <section id="tab-review" class="panel">
+  <section id="tab-review" class="panel" role="tabpanel" aria-labelledby="tab-btn-review" tabindex="0" aria-hidden="true">
     <div class="card">
-      <h2>Scanner-Safe Break-Glass Owner Approval</h2>
-      <p class="sub">Email link scanners (Microsoft SafeLinks / Gmail) pre-fetch GET links. Approving requires an explicit human POST action that resumes Step Functions via <code>SendTaskSuccess</code>.</p>
+      <h2>Break-glass owner approval</h2>
+      <p class="sub">Approval requires an explicit human POST action. In local mode the workflow is simulated; the AWS deployment design uses Step Functions.</p>
 
       <div class="row" style="margin-bottom: 14px;">
         <input id="manual-review-token" type="text" placeholder="Approval token (auto-filled from #review=...)" style="max-width: 340px;" />
         <button class="btn secondary sm" onclick="loadApprovalToken()">Inspect Request</button>
       </div>
 
-      <div id="review-empty" class="alert">No active approval token loaded. Create a Break-Glass drop and request unlock to trigger SNS + Step Functions.</div>
+      <div id="review-empty" class="alert">No active approval token loaded. Create an approval-mode demo drop and request an unlock to continue.</div>
 
       <div id="review-card" class="hidden">
         <div class="kv">
@@ -506,27 +551,27 @@
           <button id="deny-btn" class="btn danger" onclick="submitApproval('DENY')">🚫 Deny &amp; Shred Immediately</button>
           <button id="back-to-recipient-btn" class="btn secondary hidden" onclick="returnToRecipientAfterApprove()">⬅️ Switch to Recipient Tab</button>
         </div>
-        <div id="review-status" class="alert hidden"></div>
+        <div id="review-status" class="alert hidden" role="status" aria-live="polite"></div>
       </div>
     </div>
   </section>
 
-  <!-- TAB 4: LIVE RACE LAB -->
-  <section id="tab-racelab" class="panel">
+  <!-- TAB 4: RACE LAB -->
+  <section id="tab-racelab" class="panel" role="tabpanel" aria-labelledby="tab-btn-racelab" tabindex="0" aria-hidden="true">
     <div class="card">
       <div class="row" style="justify-content: space-between;">
         <div>
           <h2>🧪 Dual-Mode 20-Request Concurrency Race Lab</h2>
-          <p class="sub">The DynamoDB worker lab is available only in the local emulator; the browser HTTP race runs against the selected deployment.</p>
+          <p class="sub">The worker race runs only in the local emulator. The browser race sends 20 claim requests to the connected backend and creates a short-lived test drop.</p>
         </div>
         <div class="row">
           <button id="run-race-btn" class="btn" onclick="runRaceLab()">⚡ Local 20-Thread DB Race</button>
-          <button id="run-http-race-btn" class="btn secondary" onclick="runBrowserHttpRace()">🌐 20-Fetch Live HTTP Race</button>
+          <button id="run-http-race-btn" class="btn secondary" onclick="runBrowserHttpRace()">🌐 20-request API race (writes a test drop)</button>
         </div>
       </div>
 
       <div id="race-empty" class="alert">
-        Click <strong>"20-Thread DB Race"</strong> to compare Naive vs. Atomic ConditionExpression, or <strong>"20-Fetch Live HTTP Race"</strong> to fire 20 real parallel browser requests at <code>POST /api/drops/{id}/claim</code>!
+        Use the local worker race for an in-memory comparison. The browser race creates one synthetic drop on the connected backend, then sends 20 parallel <code>POST /api/drops/{id}/claim</code> requests; on a remote backend, that creates remote test data.
       </div>
 
       <div id="race-results" class="grid-2 hidden">
@@ -546,28 +591,28 @@
     </div>
   </section>
 
-  <!-- TAB 5: KMS AUDIT CHAIN & OFFLINE AUDIT CERTIFICATE -->
-  <section id="tab-receipt" class="panel">
+  <!-- TAB 5: SIGNED AUDIT CHAIN & OFFLINE CERTIFICATE -->
+  <section id="tab-receipt" class="panel" role="tabpanel" aria-labelledby="tab-btn-receipt" tabindex="0" aria-hidden="true">
     <div class="card">
-      <h2>🔗 Hash-Chained KMS Audit Ledger &amp; Offline Certificate</h2>
-      <p class="sub">Every lifecycle event links <code>prev_hash = SHA256(prev_event)</code> and carries an AWS KMS (<code>ECC_NIST_P256</code>) signature. Verify live or export a standalone offline certificate.</p>
+      <h2>🔗 Signed audit ledger &amp; offline certificate</h2>
+      <p class="sub">Each entry links to the previous hash and carries a P-256 signature. Local mode uses an ephemeral OpenSSL signer; an AWS deployment can use KMS. Verify in your browser or export a standalone certificate.</p>
 
       <div class="row" style="margin-bottom: 14px;">
         <input id="receipt-drop-id" type="text" placeholder="Enter Drop ID" style="max-width: 300px;" />
         <button class="btn secondary sm" onclick="loadReceipt()">Fetch Audit Ledger</button>
       </div>
 
-      <div id="receipt-empty" class="alert">Create or burn a drop first, or enter any Drop ID above to audit its KMS hash chain.</div>
+      <div id="receipt-empty" class="alert">Create or claim a drop first, or enter a Drop ID above to inspect its signed hash chain.</div>
 
       <div id="receipt-card" class="hidden">
         <div class="row" style="margin-bottom: 12px;">
-          <button class="btn success" onclick="verifyEntireAuditChain()">✅ Verify Entire Chain + All KMS Signatures</button>
+          <button class="btn success" onclick="verifyEntireAuditChain()">✅ Verify chain and P-256 signatures</button>
           <button class="btn danger sm" onclick="tamperChainEntryOne()">🧪 Flip 1 Char in Entry #1 (Cascade Test)</button>
           <button class="btn secondary sm" onclick="restoreAuditChain()">↩️ Restore</button>
           <button class="btn sm" onclick="exportHtmlCertificate()">📄 Export Verifiable HTML Cert</button>
           <button class="btn secondary sm" onclick="exportJsonBundle()">📥 Export JSON</button>
         </div>
-        <div id="rc-verify-out" class="alert hidden"></div>
+        <div id="rc-verify-out" class="alert hidden" role="status" aria-live="polite"></div>
 
         <h3>Tamper-Evident Audit Chain Timeline</h3>
         <div id="chain-timeline"></div>
@@ -588,44 +633,39 @@
     </div>
   </section>
 
-  <!-- TAB 6: LIVE AWS SOC & COST TELEMETRY -->
-  <section id="tab-soc" class="panel">
+  <!-- TAB 6: AGGREGATE TELEMETRY -->
+  <section id="tab-soc" class="panel" role="tabpanel" aria-labelledby="tab-btn-soc" tabindex="0" aria-hidden="true">
     <div class="card">
       <div class="row" style="justify-content: space-between;">
         <div>
-          <h2>🛡️ Live AWS Security Operations Center (Zero-Scan DynamoDB Feed)</h2>
-          <p class="sub">Real-time anonymized threat &amp; lifecycle telemetry from <code>GET /api/telemetry/soc</code> (1-RCU single-partition read, zero table scans).</p>
+          <h2>🛡️ Aggregate security counters</h2>
+          <p class="sub">Polled counters from <code>GET /api/telemetry/soc</code>. This endpoint returns aggregates, not an event stream or per-drop details. Local mode reads emulator data.</p>
         </div>
-        <button class="btn secondary sm" onclick="loadSocTelemetry()">🔄 Refresh SOC Feed</button>
+        <button class="btn secondary sm" onclick="loadSocTelemetry()">🔄 Refresh counters</button>
       </div>
+      <div id="soc-status" class="help-note" role="status" aria-live="polite">Counters update when this tab is open.</div>
 
       <div class="soc-grid">
-        <div class="soc-kpi"><div id="soc-created" class="num">0</div><div class="lbl">Zero-Knowledge Drops Created</div></div>
-        <div class="soc-kpi"><div id="soc-burned" class="num" style="color:#86efac;">0</div><div class="lbl">Atomic One-Time Burns</div></div>
-        <div class="soc-kpi"><div id="soc-bots" class="num" style="color:#fde68a;">0</div><div class="lbl">Preview Crawlers Blocked (403)</div></div>
-        <div class="soc-kpi"><div id="soc-canary" class="num" style="color:#f87171;">0</div><div class="lbl">Canary Honeypot Tripwires</div></div>
-        <div class="soc-kpi"><div id="soc-shreds" class="num" style="color:#fca5a5;">0</div><div class="lbl">Owner Panic Kill Shreds</div></div>
-        <div class="soc-kpi"><div id="soc-approvals" class="num" style="color:#c4b5fd;">0</div><div class="lbl">Step Functions Break-Glass Starts</div></div>
+        <div class="soc-kpi"><div id="soc-created" class="num">0</div><div class="lbl">Drops created</div></div>
+        <div class="soc-kpi"><div id="soc-burned" class="num" style="color:#86efac;">0</div><div class="lbl">One-time claims</div></div>
+        <div class="soc-kpi"><div id="soc-bots" class="num" style="color:#fde68a;">0</div><div class="lbl">Preview requests blocked</div></div>
+        <div class="soc-kpi"><div id="soc-canary" class="num" style="color:#f87171;">0</div><div class="lbl">Canary alerts</div></div>
+        <div class="soc-kpi"><div id="soc-shreds" class="num" style="color:#fca5a5;">0</div><div class="lbl">Owner shreds</div></div>
+        <div class="soc-kpi"><div id="soc-approvals" class="num" style="color:#c4b5fd;">0</div><div class="lbl">Approval requests</div></div>
       </div>
 
-      <div class="alert ok" style="margin-bottom: 14px;">
-        <strong>💸 Scale-to-Zero Serverless Economics:</strong>
-        Idle compute cost = <strong>$0.00/mo</strong> (vs. ~$45–$120/mo for an always-on EC2 + NAT + Vault server). Every drop costs ~<strong>0.0002¢</strong> in Lambda/DynamoDB On-Demand.
-      </div>
-
-      <h3>Recent Cryptographic Security Events (Click Drop ID to Audit KMS Chain)</h3>
-      <div id="soc-events-list" class="mono-box" style="max-height: 290px; overflow-y: auto;">Loading SOC stream...</div>
+      <h3>Event details</h3>
+      <div id="soc-events-list" class="alert">This API response intentionally withholds individual events, drop IDs, and actor details. No event stream is exposed here.</div>
     </div>
   </section>
 
-  <p class="footer-note">
-    Built for AWS Builder Center Weekend Challenge: <strong>No Pipeline, No Problem</strong> • CloudFront + S3 + HTTP API + Lambda + Step Functions + DynamoDB + KMS + SNS + CloudWatch
-  </p>
+  <p class="footer-note">ZeroDrop v4.0 APEX prototype • AWS resources are defined in SAM; the local emulator does not deploy or verify them.</p>
 </div>
 
 <script>
 const API = "";
 let currentMode = "fast";
+let localEmulator = false;
 let lastShareUrl = "";
 let lastShareUrls = [];
 let activeDropId = "";
@@ -809,14 +849,39 @@ async function deriveAesKey(rawKeyBytes, keyB64u, passphrase, ivB64) {
 }
 
 function switchTab(name) {
-  document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
-  document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === "tab-" + name));
+  document.querySelectorAll(".tab-btn").forEach(b => {
+    const selected = b.dataset.tab === name;
+    b.classList.toggle("active", selected);
+    b.setAttribute("aria-selected", String(selected));
+    b.tabIndex = selected ? 0 : -1;
+  });
+  document.querySelectorAll(".panel").forEach(p => {
+    const selected = p.id === "tab-" + name;
+    p.classList.toggle("active", selected);
+    p.setAttribute("aria-hidden", String(!selected));
+  });
   if (socTimer) { clearInterval(socTimer); socTimer = null; }
   if (name === "soc") {
     loadSocTelemetry();
     socTimer = setInterval(loadSocTelemetry, 3000);
   }
 }
+
+document.querySelector(".tabs").addEventListener("keydown", event => {
+  const current = event.target.closest(".tab-btn");
+  if (!current) return;
+  const tabs = Array.from(document.querySelectorAll(".tab-btn"));
+  const index = tabs.indexOf(current);
+  let next = index;
+  if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+  else if (event.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
+  else if (event.key === "Home") next = 0;
+  else if (event.key === "End") next = tabs.length - 1;
+  else return;
+  event.preventDefault();
+  tabs[next].focus();
+  switchTab(tabs[next].dataset.tab);
+});
 
 function shannonEntropy(str) {
   if (!str) return 0;
@@ -868,24 +933,26 @@ function applyRecommendedGuardrails() {
   const box = document.getElementById("preflight-box");
   box.classList.remove("warn");
   box.classList.add("ok");
-  box.textContent = "✅ Applied Break-Glass Approval (Step Functions) + 2-of-3 Shamir Quorum!";
+  box.textContent = "✅ Selected owner approval and a 2-of-3 Shamir quorum.";
 }
 
 function selectMode(mode) {
   currentMode = mode;
   document.getElementById("mode-fast-card").classList.toggle("selected", mode === "fast");
   document.getElementById("mode-approval-card").classList.toggle("selected", mode === "approval");
+  document.getElementById("mode-fast-radio").checked = mode === "fast";
+  document.getElementById("mode-approval-radio").checked = mode === "approval";
 }
 
 function loadSampleEnv() {
   document.getElementById("secret-file").value = "";
   document.getElementById("drop-passphrase").value = "";
-  document.getElementById("drop-label").value = "Prod Billing Webhook & DB Credentials";
+  document.getElementById("drop-label").value = "Synthetic Demo Configuration";
   document.getElementById("secret-text").value =
-`# Temporary break-glass production creds (rotates in 1h)
-DATABASE_URL=postgres://svc_billing:9fA!k29xLmQp41@prod-db.internal:5432/ledger
-STRIPE_WEBHOOK_SECRET=whsec_9a82b71c64e0f239d18a91c4e28a102b
-INTERNAL_ADMIN_TOKEN=zd_live_tok_88392019481029`;
+`# SYNTHETIC DEMO DATA ONLY — NOT REAL CREDENTIALS
+DATABASE_URL=postgres://demo_user:synthetic-only@demo-db.example.invalid:5432/sample
+WEBHOOK_SECRET=synthetic_demo_value_not_a_real_secret
+INTERNAL_API_TOKEN=demo-token-not-valid-anywhere`;
   document.getElementById("canary-alert-chk").checked = false;
   scanSecretPreflight();
 }
@@ -893,10 +960,10 @@ INTERNAL_ADMIN_TOKEN=zd_live_tok_88392019481029`;
 function loadCanaryPreset() {
   document.getElementById("secret-file").value = "";
   document.getElementById("drop-passphrase").value = "";
-  document.getElementById("drop-label").value = "🍯 Canary Honeypot: Decoy Internal Prod Config";
+  document.getElementById("drop-label").value = "Synthetic Canary Decoy";
   document.getElementById("secret-text").value =
-`# CANARY DECOY (ZERO REAL CREDENTIALS - INTRUDER TRIPWIRE)
-SERVICE_ENDPOINT=https://internal-decoy.example.invalid/v1/admin
+`# SYNTHETIC CANARY DECOY — ZERO REAL CREDENTIALS
+SERVICE_ENDPOINT=https://decoy.example.invalid/v1/admin
 DECOY_API_TOKEN=zd_decoy_not_a_real_secret_000000000000`;
   selectMode("approval");
   document.getElementById("canary-alert-chk").checked = true;
@@ -906,16 +973,37 @@ DECOY_API_TOKEN=zd_decoy_not_a_real_secret_000000000000`;
 async function checkHealth() {
   try {
     const r = await fetch(API + "/api/health");
+    if (!r.ok) throw new Error("Health endpoint returned " + r.status);
     const d = await r.json();
+    localEmulator = Boolean(d.local_emulator);
     const envPill = document.getElementById("env-pill");
-    envPill.textContent = d.local_emulator ? "Local AWS Emulator (v3)" : "Live AWS Serverless (v3)";
-    envPill.classList.add("ok");
+    const version = d.version ? ` v${d.version}` : "";
+    envPill.className = "pill " + (localEmulator ? "warn" : "ok");
+    envPill.textContent = localEmulator ? `Local emulator · ZeroDrop${version}` : `Remote API responding · ZeroDrop${version}`;
     const kmsPill = document.getElementById("kms-pill");
-    kmsPill.textContent = d.kms_enabled ? "KMS ECDSA P-256 Active" : "SHA-256 Receipts";
-    if (d.kms_enabled) kmsPill.classList.add("ok");
-    document.getElementById("hdr-fp").textContent = d.kms_fingerprint || "unavailable";
+    kmsPill.className = "pill mono " + (localEmulator ? "warn" : (d.kms_enabled ? "ok" : ""));
+    kmsPill.textContent = localEmulator ? "Local OpenSSL P-256 signer" : (d.kms_enabled ? "Remote P-256 signer configured" : "KMS not configured");
+    document.getElementById("backend-summary").textContent = `${localEmulator ? "Backend: in-memory emulator" : "Backend: remote API"} • P-256 fingerprint: ${d.kms_fingerprint || "unavailable"}`;
+    const notice = document.getElementById("runtime-notice");
+    notice.className = "runtime-notice " + (localEmulator ? "local" : "remote");
+    notice.textContent = localEmulator
+      ? "LOCAL EMULATOR — storage, workflow, notifications, and signing are simulated locally. Use synthetic data; this does not verify or imply an AWS deployment."
+      : "REMOTE API — requests may create or change remote data. This health check does not verify who deployed the endpoint or its AWS configuration; use synthetic data.";
+    const demoBtn = document.getElementById("auto-demo-btn");
+    demoBtn.disabled = !localEmulator;
+    demoBtn.textContent = localEmulator ? "▶ Run local demo" : "Local demo disabled on remote API";
+    demoBtn.title = localEmulator ? "Uses synthetic data against the local emulator." : "The guided demo is restricted to the local emulator to avoid remote writes.";
   } catch (e) {
-    document.getElementById("env-pill").textContent = "Backend Unreachable";
+    localEmulator = false;
+    const envPill = document.getElementById("env-pill");
+    envPill.className = "pill bad";
+    envPill.textContent = "Backend unreachable";
+    document.getElementById("kms-pill").textContent = "Signer unavailable";
+    document.getElementById("runtime-notice").className = "runtime-notice offline";
+    document.getElementById("runtime-notice").textContent = "Backend unreachable. Start the local emulator before running the demo; no deployment status can be checked.";
+    const demoBtn = document.getElementById("auto-demo-btn");
+    demoBtn.disabled = true;
+    demoBtn.textContent = "Backend required for local demo";
   }
 }
 
@@ -1083,7 +1171,7 @@ function showCreateSuccess(data, keyB64u, ivB64, payloadHash, hasPass, shares, q
   }
 
   document.getElementById("res-drop-id").textContent = data.drop_id;
-  document.getElementById("res-mode").textContent = data.mode === "approval" ? "Break-Glass Approval (Step Functions)" : "Fast Atomic Burn";
+  document.getElementById("res-mode").textContent = data.mode === "approval" ? "Break-Glass Approval Workflow" : "Fast Atomic Burn";
   const prot = [];
   if (quorum) prot.push(`${quorum.threshold}-of-${quorum.total} Shamir GF(256)`);
   if (hasPass) prot.push("PBKDF2 2FA");
@@ -1110,7 +1198,7 @@ async function panicShredCreated() {
     if (r.ok) {
       lightPipeline(["edge", "ddb", "kms"], "lit-red");
       stBox.classList.add("err");
-      stBox.textContent = `☠️ OWNER_SHREDDED! Ciphertext scrubbed, S3/SFN halted, and KMS event #${(d.audit_chain || []).length} (OWNER_PANIC_SHREDDED) signed.`;
+      stBox.textContent = `☠️ Drop shredded. Backend removed the ciphertext; signed audit entries: ${(d.audit_chain || []).length}.`;
       btn.textContent = "☠️ Shredded";
     } else {
       stBox.classList.add("err");
@@ -1232,7 +1320,7 @@ async function loadDropStatus(dropId) {
 function renderStatusMeta(d) {
   document.getElementById("u-id").textContent = d.drop_id;
   document.getElementById("u-label").textContent = "Private encrypted drop";
-  document.getElementById("u-mode").textContent = d.mode === "approval" ? "Break-Glass Approval (Step Functions)" : "Fast Atomic Burn";
+  document.getElementById("u-mode").textContent = d.mode === "approval" ? "Break-Glass Approval Workflow" : "Fast Atomic Burn";
   document.getElementById("u-status").textContent = d.status + " (" + (d.shred_state || "ACTIVE") + ")";
   document.getElementById("u-file").textContent = d.has_file ? "Encrypted file" : "Encrypted text secret";
 
@@ -1242,7 +1330,7 @@ function renderStatusMeta(d) {
   document.getElementById("u-pass-req").textContent = protDesc.length ? protDesc.join(" + ") : "Single URL Key";
 
   document.getElementById("u-bots").textContent = String(d.bot_shield_hits || 0);
-  document.getElementById("u-chain-len").textContent = String(d.chain_length || 1) + " KMS-signed events";
+  document.getElementById("u-chain-len").textContent = String(d.chain_length || 1) + " P-256-signed audit entries";
   document.getElementById("unlock-passphrase-box").classList.toggle("hidden", !activePassphraseRequired || d.status !== "READY");
 
   const qBox = document.getElementById("unlock-quorum-box");
@@ -1310,14 +1398,14 @@ async function simulateBotCrawl() {
   box.classList.remove("hidden");
   const d = await r.json();
   if (r.status === 403) {
-    box.textContent = "🛡️ Bot Shield Blocked (" + r.status + "): " + d.message + " — Logged to KMS Audit Chain; Secret stays 100% intact!";
+    box.textContent = "🛡️ Preview request blocked (" + r.status + "): " + d.message + " — Recorded in the signed audit log; secret remains intact.";
     lightPipeline(["edge", "kms"], "lit-amber");
   } else {
     box.textContent = "Response (" + r.status + "): " + (d.message || d.error || "Protected");
   }
   const st = await (await fetch(API + "/api/drops/" + encodeURIComponent(activeDropId) + "/status")).json();
   document.getElementById("u-bots").textContent = String(st.bot_shield_hits || 0);
-  document.getElementById("u-chain-len").textContent = String(st.chain_length || 1) + " KMS-signed events";
+  document.getElementById("u-chain-len").textContent = String(st.chain_length || 1) + " P-256-signed audit entries";
 }
 
 async function verifyLocalUnlockInputsBeforeBurn(ivB64) {
@@ -1339,7 +1427,7 @@ async function verifyLocalUnlockInputsBeforeBurn(ivB64) {
       );
       if (new TextDecoder().decode(dec) !== "ZERODROP_KEY_OK") throw new Error("mismatch");
     } catch {
-      throw new Error("❌ Wrong passphrase or invalid Quorum share! Checked locally BEFORE calling AWS — secret NOT burned.");
+      throw new Error("❌ Wrong passphrase or invalid quorum share. Checked locally before submitting a claim request; the secret was not burned.");
     }
   }
   return { rawKey, keyB64u, pass };
@@ -1412,7 +1500,7 @@ function startApprovalPoll() {
     if (!r.ok) return;
     const d = await r.json();
     document.getElementById("u-status").textContent = d.status + " (" + (d.shred_state || "ACTIVE") + ")";
-    document.getElementById("u-chain-len").textContent = String(d.chain_length || 1) + " KMS-signed events";
+    document.getElementById("u-chain-len").textContent = String(d.chain_length || 1) + " P-256-signed audit entries";
     if (d.demo_approval_url) {
       window.__demoApprovalUrl = d.demo_approval_url;
       document.getElementById("demo-inbox-box").classList.remove("hidden");
@@ -1426,7 +1514,7 @@ function startApprovalPoll() {
       pollTimer = null;
       document.getElementById("unlock-waiting").classList.add("hidden");
       const box = document.getElementById("unlock-burned-box");
-      box.textContent = "🚫 Secret terminated (" + d.status + "). Permanently scrubbed across DynamoDB & S3.";
+      box.textContent = "🚫 Drop ended (" + d.status + "). The connected backend reports the requested shred/expiry state.";
       box.classList.remove("hidden");
     }
   }, 1500);
@@ -1461,7 +1549,7 @@ async function decryptClaimedPayload(d) {
   wrap.classList.remove("hidden");
   document.getElementById("view-receipt-btn").classList.remove("hidden");
   if (d.audit_chain) {
-    document.getElementById("u-chain-len").textContent = String(d.audit_chain.length) + " KMS-signed events";
+    document.getElementById("u-chain-len").textContent = String(d.audit_chain.length) + " P-256-signed audit entries";
   }
 
   let rawKey;
@@ -1650,8 +1738,8 @@ async function submitApproval(decision) {
   if (r.ok) {
     st.classList.add(decision === "APPROVE" ? "ok" : "err");
     st.textContent = decision === "APPROVE"
-      ? "✅ Step Functions SendTaskSuccess triggered! Secret released once & 90s parallel shred countdown started."
-      : "🚫 Step Functions SendTaskFailure triggered! Secret immediately scrubbed across DynamoDB + S3.";
+      ? (localEmulator ? "✅ Local approval simulation recorded. Release is authorized once; cleanup timing is emulator-defined." : "✅ Approval recorded by the connected backend. This page does not verify live AWS workflow or cleanup behavior.")
+      : "🚫 Owner decision recorded; the configured approval workflow requested a shred.";
     document.getElementById("r-decision").textContent = decision;
     document.getElementById("approve-btn").disabled = true;
     document.getElementById("deny-btn").disabled = true;
@@ -1681,7 +1769,7 @@ async function runRaceLab() {
     });
     if (!r.ok) {
       const message = document.getElementById("race-empty");
-      message.textContent = "The server-side race lab is available only in the local emulator. Start local_server.py to run it; the live browser HTTP race remains available here.";
+      message.textContent = "The in-memory worker race is available only in the local emulator. Start local_server.py to run it; the browser API race sends requests to the connected backend.";
       message.classList.remove("hidden");
       document.getElementById("race-results").classList.add("hidden");
       return;
@@ -1715,8 +1803,9 @@ async function runRaceLab() {
 
 async function runBrowserHttpRace() {
   const btn = document.getElementById("run-http-race-btn");
+  if (!localEmulator && !window.confirm("This creates a synthetic test drop and sends 20 claim requests to the remote API. Continue?")) return;
   btn.disabled = true;
-  btn.textContent = "Firing 20 Parallel fetch() Calls...";
+  btn.textContent = "Sending 20 parallel requests…";
   lightPipeline(["crypto", "edge", "ddb", "kms"]);
   try {
     const aesKey = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
@@ -1726,11 +1815,12 @@ async function runBrowserHttpRace() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        mode: "fast", label: "Live Browser 20-Fetch HTTP Race", ttl_minutes: 15,
+        mode: "fast", label: "Synthetic 20-request browser race", ttl_minutes: 15,
         iv_b64: bytesToB64(iv), ciphertext_b64: bytesToB64(cipherBuf),
       }),
     });
     const created = await crRes.json();
+    if (!crRes.ok || !created.drop_id) throw new Error(created.error || created.message || "Could not create the synthetic race drop.");
     const dropId = created.drop_id;
 
     const calls = Array.from({ length: 20 }, (_, i) => (async () => {
@@ -1749,24 +1839,28 @@ async function runBrowserHttpRace() {
 
     document.getElementById("race-empty").classList.add("hidden");
     document.getElementById("race-results").classList.remove("hidden");
-    document.getElementById("race-left-title").textContent = "🌐 Real Browser HTTP Summary (" + esc(dropId) + ")";
+    document.getElementById("race-left-title").textContent = "🌐 Browser API summary (" + esc(dropId) + ")";
     document.getElementById("race-right-title").textContent = "✅ 20 Parallel fetch() Responses";
     document.getElementById("race-naive-verdict").className = "alert ok";
     document.getElementById("race-naive-verdict").textContent =
-      `LIVE PROOF: ${winners.length}/20 HTTP 200 OK Winner, ${blocked.length}/20 HTTP 410 Gone Blocked!`;
-    document.getElementById("race-naive-stats").textContent = "Drop ID: " + dropId + " (Verifiable in KMS Audit Chain tab)";
+      `Observed on the connected backend: ${winners.length}/20 HTTP 200 responses; ${blocked.length}/20 HTTP 410 responses.`;
+    document.getElementById("race-naive-stats").textContent = "Synthetic Drop ID: " + dropId + " (inspect in Audit & Certificate tab)";
     document.getElementById("race-naive-grid").innerHTML = "";
     document.getElementById("race-atomic-verdict").className = "alert ok";
     document.getElementById("race-atomic-verdict").textContent =
-      `Browser fired 20 concurrent POST /api/drops/${dropId}/claim requests via Promise.all().`;
-    document.getElementById("race-atomic-stats").textContent = "Check DevTools Network tab: 1 x 200 + 19 x 410!";
+      `The browser sent 20 concurrent POST /api/drops/${dropId}/claim requests via Promise.all().`;
+    document.getElementById("race-atomic-stats").textContent = "Results reflect the responses returned by the connected backend.";
     document.getElementById("race-atomic-grid").innerHTML = results.map(w =>
       `<div class="worker-cell ${w.status === 200 ? 'win' : 'block'}">#${w.worker}<br>HTTP ${w.status}<br>${w.ms}ms</div>`
     ).join("");
     lightPipeline(["edge", "ddb", "kms"], "lit-green");
+  } catch (e) {
+    const message = document.getElementById("race-empty");
+    message.classList.remove("hidden");
+    message.textContent = "Race run failed: " + e.message;
   } finally {
     btn.disabled = false;
-    btn.textContent = "🌐 20-Fetch Live HTTP Race";
+    btn.textContent = "🌐 20-request API race (writes a test drop)";
   }
 }
 
@@ -1837,7 +1931,7 @@ async function verifyEntireAuditChain() {
   out.classList.remove("hidden", "ok", "err");
   if (!loadedLedgerObj || !loadedLedgerObj.public_key || !loadedLedgerObj.public_key.spki_b64) {
     out.classList.add("err");
-    out.textContent = "KMS Public Key unavailable.";
+    out.textContent = "P-256 public key unavailable.";
     return;
   }
   const pubKey = await crypto.subtle.importKey(
@@ -1867,7 +1961,7 @@ async function verifyEntireAuditChain() {
     if (!sigOk || !linkOk || !hashOk) {
       allOk = false;
       const reasons = [];
-      if (!sigOk) reasons.push("KMS SIGNATURE INVALID");
+      if (!sigOk) reasons.push("P-256 signature invalid");
       if (!linkOk) reasons.push("BROKEN prev_hash CHAIN LINK");
       if (!hashOk) reasons.push("HASH MISMATCH");
       verdicts.push({ ok: false, reason: reasons.join(" + ") });
@@ -1881,11 +1975,11 @@ async function verifyEntireAuditChain() {
   if (allOk) {
     lightPipeline(["kms"], "lit-green");
     out.classList.add("ok");
-    out.textContent = `✅ ENTIRE ${workingChain.length}-EVENT HASH CHAIN & ALL KMS ECDSA P-256 SIGNATURES VERIFIED! Zero tampering detected.`;
+    out.textContent = `✅ Entire ${workingChain.length}-entry hash chain and all P-256 signatures verified. No tampering detected.`;
   } else {
     lightPipeline(["kms"], "lit-amber");
     out.classList.add("err");
-    out.textContent = `❌ TAMPER DETECTED! Modifying 1 character invalidated the KMS signature and broke downstream prev_hash links.`;
+    out.textContent = `❌ Tampering detected: changing one character invalidated the P-256 signature and broke downstream prev_hash links.`;
   }
 }
 
@@ -1916,17 +2010,17 @@ function exportJsonBundle() {
 function exportHtmlCertificate() {
   if (!loadedLedgerObj) return;
   const safeJson = JSON.stringify(loadedLedgerObj).replace(/</g, "\\u003c");
-  const certHtml = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>ZeroDrop KMS Audit Certificate - ${esc(loadedLedgerObj.drop_id)}</title>
+  const certHtml = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>ZeroDrop v4.0 APEX Audit Certificate - ${esc(loadedLedgerObj.drop_id)}</title>
 <style>body{font-family:system-ui,sans-serif;background:#090d16;color:#e6edf7;max-width:920px;margin:28px auto;padding:0 18px}
 .card{background:#121826;border:1px solid #26324d;border-radius:12px;padding:18px;margin-bottom:14px}
 code,pre{font-family:ui-monospace,monospace;font-size:12px;word-break:break-all;background:#070a11;padding:8px;border-radius:8px;display:block}
 button{background:#22c55e;color:#051b0c;border:0;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer}
 .ok{color:#86efac}.bad{color:#fca5a5}</style></head><body>
-<h1>ZeroDrop Offline KMS Cryptographic Audit Certificate</h1>
+<h1>ZeroDrop v4.0 APEX Offline Audit Certificate</h1>
 <div class="card"><strong>Drop ID:</strong> ${esc(loadedLedgerObj.drop_id)} &bull; <strong>Status:</strong> ${esc(loadedLedgerObj.status)} &bull; <strong>Shred State:</strong> ${esc(loadedLedgerObj.shred_state)}<br>
-<strong>KMS Key ID:</strong> ${esc((loadedLedgerObj.public_key || {}).key_id)}<br>
-<strong>KMS SPKI Fingerprint (SHA-256):</strong> ${esc((loadedLedgerObj.public_key || {}).fingerprint_sha256)}
-<div style="margin-top:12px;"><button onclick="verifyOffline()">Verify All KMS Signatures &amp; Hash Chain Offline (WebCrypto)</button></div>
+<strong>Signing key ID:</strong> ${esc((loadedLedgerObj.public_key || {}).key_id)}<br>
+<strong>Signer fingerprint (SHA-256):</strong> ${esc((loadedLedgerObj.public_key || {}).fingerprint_sha256)}
+<div style="margin-top:12px;"><button onclick="verifyOffline()">Verify P-256 signatures and hash chain offline (WebCrypto)</button></div>
 <p id="verdict"></p></div>
 <div id="entries"></div>
 <script>
@@ -1946,7 +2040,7 @@ async function verifyOffline(){
   prev=h;
  }
  document.getElementById('entries').innerHTML=out.join('');
- document.getElementById('verdict').innerHTML=okAll?'<span class="ok">✅ ALL '+BUNDLE.audit_chain.length+' KMS P-256 ENTRIES VERIFIED OFFLINE!</span>':'<span class="bad">❌ VERIFICATION FAILED</span>';
+ document.getElementById('verdict').innerHTML=okAll?'<span class="ok">✅ ALL '+BUNDLE.audit_chain.length+' P-256 ENTRIES VERIFIED OFFLINE!</span>':'<span class="bad">❌ VERIFICATION FAILED</span>';
 }
 verifyOffline();
 <\/script></body></html>`;
@@ -1960,45 +2054,59 @@ verifyOffline();
 async function runGuidedJudgeDemo() {
   const btn = document.getElementById("auto-demo-btn");
   const st = document.getElementById("tour-status");
+  if (!localEmulator) {
+    st.textContent = "The guided demo runs only against the local emulator. No remote writes were started.";
+    return;
+  }
   btn.disabled = true;
-  btn.textContent = "Running Demo...";
+  btn.textContent = "Running local demo…";
   try {
-    st.textContent = "Step 1/4: Encrypting .env locally via WebCrypto AES-256-GCM...";
+    st.textContent = "Step 1/4: Encrypting the synthetic sample in this browser with AES-256-GCM…";
     switchTab("create");
     selectMode("fast");
     document.getElementById("quorum-select").value = "1of1";
+    activeDropId = "";
     loadSampleEnv();
     await createDrop();
+    if (!activeDropId) throw new Error(document.getElementById("create-error").textContent || "Drop creation did not complete.");
     await new Promise(r => setTimeout(r, 450));
 
-    st.textContent = "Step 2/4: Opening Unlocker & simulating Slackbot link-preview attack (403 Block)...";
+    st.textContent = "Step 2/4: Opening the unlocker and simulating a preview-bot request (403)…";
     openGeneratedDrop();
     await new Promise(r => setTimeout(r, 450));
     await simulateBotCrawl();
     await new Promise(r => setTimeout(r, 550));
 
-    st.textContent = "Step 3/4: Atomically unlocking & burning secret once via DynamoDB ConditionExpression...";
+    st.textContent = "Step 3/4: Claiming the synthetic drop once through the local emulator…";
     await claimDrop();
+    if (document.getElementById("unlock-plaintext-wrap").classList.contains("hidden")) throw new Error("The local claim did not complete.");
     await new Promise(r => setTimeout(r, 550));
 
-    st.textContent = "Step 4/4: Verifying 3-entry Hash-Chained KMS ECDSA P-256 Audit Ledger in WebCrypto...";
-    jumpToReceipt();
+    st.textContent = "Step 4/4: Verifying the signed hash chain in WebCrypto…";
+    document.getElementById("receipt-drop-id").value = activeDropId;
+    switchTab("receipt");
+    await loadReceipt(activeDropId);
     await new Promise(r => setTimeout(r, 450));
     await verifyEntireAuditChain();
-    st.textContent = "✅ Demo Complete! Created → Blocked Slackbot (403) → Atomic Burn → 3/3 KMS Hash-Chain Verified!";
+    if (!document.getElementById("rc-verify-out").classList.contains("ok")) throw new Error("The signed audit verification did not pass.");
+    st.textContent = "✅ Local demo complete: synthetic drop → preview-bot block → one-time claim → signed audit verified.";
   } catch (e) {
     st.textContent = "Demo failed: " + e.message;
   } finally {
-    btn.disabled = false;
-    btn.textContent = "▶ Auto-Run Live Security Demo";
+    btn.disabled = !localEmulator;
+    btn.textContent = localEmulator ? "▶ Run local demo" : "Local demo disabled on remote API";
   }
 }
 
 async function loadSocTelemetry() {
+  const statusEl = document.getElementById("soc-status");
   try {
     const r = await fetch(API + "/api/telemetry/soc");
     const d = await r.json();
-    if (!r.ok) return;
+    if (!r.ok) {
+      statusEl.textContent = "Could not load aggregate counters (HTTP " + r.status + "). Try Refresh counters.";
+      return;
+    }
     const c = d.counters || {};
     document.getElementById("soc-created").textContent = String(c.total_created || 0);
     document.getElementById("soc-burned").textContent = String(c.total_burned || 0);
@@ -2006,10 +2114,10 @@ async function loadSocTelemetry() {
     document.getElementById("soc-canary").textContent = String(c.total_canary_alerts || 0);
     document.getElementById("soc-shreds").textContent = String(c.total_panic_shreds || 0);
     document.getElementById("soc-approvals").textContent = String(c.total_approvals || 0);
-
-    const listEl = document.getElementById("soc-events-list");
-    listEl.textContent = "Per-drop event details are withheld to protect drop metadata. Aggregate counters above remain available.";
-  } catch (e) {}
+    statusEl.textContent = "Updated " + new Date().toLocaleTimeString() + " · polls every 3 seconds while this tab is open.";
+  } catch (e) {
+    statusEl.textContent = "Could not reach the telemetry endpoint. Check backend status and try again.";
+  }
 }
 
 function auditFromSoc(dropId) {

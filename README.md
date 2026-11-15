@@ -1,63 +1,48 @@
 # ZeroDrop v4.0 APEX
 
-**Zero-Knowledge, Shamir M-of-N Quorum, Client Preflight Guardrails, 60s Screen Auto-Wipe, Panic-Shreddable, KMS-Chained & Live-SOC Secret Escrow on Serverless AWS**
+**Client-side encrypted secret sharing with Shamir quorums, optional passphrases, atomic claims, owner shred, and an AWS serverless design.**
 
-Built for the AWS Builder Center **Weekend Challenge: No Pipeline, No Problem** — deployed in one command via **AWS SAM** with zero EC2 servers, zero containers, zero CI/CD pipelines, and **$0.00 idle compute cost**.
+> **Status for this repository snapshot:** The automated suite and emulator were tested locally only. A short synthetic local walkthrough was recorded for private review; no public video was uploaded and no hackathon submission was made. This project has **not** been deployed to AWS or verified against live AWS services. The SAM template and deployment script describe how to deploy a copy; they do not indicate that a stack is running.
 
----
+## Capabilities in the code
 
-## APEX Capabilities (v4.0)
+- **Client-side encryption and Shamir `M-of-N` sharing:** The browser and CLI encrypt before sending payloads. The browser supports 2-of-3 and 3-of-5 shares plus an optional passphrase check performed locally before a claim.
+- **Preflight checks and display protections:** The browser includes secret-pattern/entropy checks, masked `.env` viewing, and a timed plaintext display wipe.
+- **Atomic claim and owner shred:** The API uses conditional state changes for one-time claims, enforces each drop's configured TTL during fast and approved collection, and supports an owner-held kill token. AWS cleanup integrations are declared in the SAM template.
+- **Break-glass workflow and audit receipts:** The code includes an approval workflow and hash-chained receipts. Local tests use the emulator and local signing behavior; AWS Step Functions and KMS behavior have not been verified in a deployment for this snapshot.
+- **Aggregate telemetry counters:** `GET /api/telemetry/soc` returns counters and status metadata. It does not expose an event list, drop IDs, or actor IP hashes. The current tests explicitly check that those event details are absent. The page polls the endpoint; this is not a push-based event stream or evidence of a live AWS SOC.
+- **AWS resources defined in SAM:** The template declares CloudFront, S3, API Gateway, Lambda, DynamoDB, Step Functions, KMS, SNS, and CloudWatch resources. They have not been deployed for this repository snapshot.
 
-- **Zero-Knowledge Browser Encryption (`AES-256-GCM`) + Shamir `M-of-N` Quorum Splitting (`GF(256)`) + Optional 2FA Passphrase (`PBKDF2-SHA256`, 120k iter):**
-  Split any 256-bit secret key locally into **2-of-3** or **3-of-5** Shamir shares (`#d=...&s=1-2-3:...`) so no single engineer holds the full key, optionally wrapped behind an out-of-band PBKDF2 passphrase verified **locally before claiming** (typos never burn secrets).
-- **In-Browser Secret & Shannon Entropy Preflight Scanner (1-Click Guardrails):**
-  Detects AWS Keys (`AKIA*`), Private Key PEMs, Stripe Secrets, API Tokens, DB URIs, and high Shannon entropy purely inside browser JS (`0` bytes leave the client), with a **1-click guardrail button** to enable Break-Glass Approval + 2-of-3 Shamir Quorum.
-- **Per-Key Masked `.env` Inspector + 60-Second Screen Auto-Wipe:**
-  Automatically parses decrypted `.env` configs into masked `KEY=••••` rows with individual eye toggles and per-value copy, backed by a **60-second automatic RAM/DOM wipe countdown** (and instant **Wipe Screen Now** button) against shoulder surfing.
-- **Live Zero-Scan AWS Security Operations Center (`Tab 6` & `GET /api/telemetry/soc`):**
-  Maintains real-time anonymized security counters (Drops Created, Burned, Bots Blocked, Canary Tripwires, Panic Shreds, Owner Approvals) and a clickable event stream inside a single DynamoDB partition (`PK = "TELEMETRY#GLOBAL"` — **zero table scans, $0.00 idle cost**).
-- **Instant Owner Panic Kill Switch (`POST /api/drops/{id}/shred`) & S3 TLS-Only Enforce:**
-  Pasted a link into the wrong Slack channel? Trigger `kill_token` to atomically scrub DynamoDB ciphertext, delete any S3 object (`VaultBucketPolicy` denies non-HTTPS via `aws:SecureTransport`), halt Step Functions (`states:StopExecution`), fire SNS, and sign **`OWNER_PANIC_SHREDDED`**.
-- **Bot-Proof Edge Shield + Canary Honeypot SNS + CloudWatch Alarm:**
-  Crawlers (`Slackbot`, `Discordbot`, `WhatsApp`) receive only the static CloudFront/OAC shell and get `403 BOT_SHIELD_BLOCKED` on `/claim`. Canary Honeypots emit structured JSON logs triggering CloudWatch Metric Filters (`ZeroDrop/Security`), `CanaryTripwireAlarm`, and SNS alerts.
-- **Step Functions Break-Glass Approval (`waitForTaskToken`) + Hash-Chained KMS P-256 Receipts + Offline HTML Certificate:**
-  Pauses up to 1 hour at `$0` idle compute until owner `APPROVE`/`DENY`, auto-shreds via a **Parallel Direct AWS SDK State**, and exports **offline-verifiable HTML cryptographic audit certificates**.
+## Expiry and object cleanup
 
----
+The browser UI offers drop-expiry choices of 15 minutes, 1 hour, 24 hours, and 7 days. The API accepts TTL values from 5 minutes to 7 days, and the CLI defaults to 60 minutes. Each drop stores a `ttl_epoch`, with DynamoDB TTL enabled in the template. Independently, the S3 vault bucket has a **7-day** lifecycle cleanup rule for encrypted objects under `vault/`. This is a backstop, not the configured expiry for every drop or a guarantee of deletion at the exact expiry instant.
 
-## Quick Start Locally (No AWS Needed)
+## Local quick start
 
 ```bash
-# Install the test dependencies, then run the automated verification suite
 python3 -m pip install -r requirements-dev.txt
-pytest -v tests/test_zerodrop.py
-
-# 2. Launch Local AWS Emulator
+pytest -q
 python3 local_server.py
 # Open http://127.0.0.1:8787
+```
 
-# 3. Try the CLI with 2-of-3 Shamir Quorum, Panic Shred & Live SOC
-echo "ROOT_DB_PASS=zd_v4_apex" | python3 cli/zerodrop_cli.py push --url http://127.0.0.1:8787 --shares 3 --threshold 2
+Try the CLI against the local emulator:
+
+```bash
+echo 'ROOT_DB_PASS=example' | python3 cli/zerodrop_cli.py push \
+  --url http://127.0.0.1:8787 --shares 3 --threshold 2
 python3 cli/zerodrop_cli.py soc --url http://127.0.0.1:8787
 ```
 
-The **Local 20-Thread DB Race** uses the in-memory emulator only. It is not exposed by the AWS API; the separate browser HTTP race is an explicit live test and creates a real short-lived drop.
+The local 20-thread race test uses the in-memory emulator. A separate browser/API race can be run against a deployed endpoint, but no live AWS race or live AWS verification was performed for this snapshot.
 
----
+## Deploying your own AWS copy
 
-## One-Command Live AWS Deployment (No Pipelines!)
+Deployment requires AWS credentials, AWS CLI, and SAM CLI. These commands are instructions only; they were not run for this snapshot:
 
 ```bash
 ./deploy.sh you@example.com
 python3 scripts/verify_live_aws.py https://<your-cloudfront-domain>
 ```
 
-`deploy.sh` generates a fresh private IP-hash salt for each deployment and passes it as a masked CloudFormation parameter. Direct `sam deploy` users must also supply a private random `IpHashSalt` of at least 32 characters.
-
-### Clean Teardown
-
-```bash
-WEB_BUCKET=$(aws cloudformation describe-stacks --stack-name zerodrop --query "Stacks[0].Outputs[?OutputKey=='WebBucketName'].OutputValue" --output text)
-aws s3 rm "s3://$WEB_BUCKET" --recursive
-sam delete --stack-name zerodrop --region us-east-1
-```
+Run the verification script only after a successful deployment. To remove a deployed copy, follow the teardown steps in the deployment script/project documentation and confirm the target stack before deleting resources.
