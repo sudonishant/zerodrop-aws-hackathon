@@ -41,6 +41,16 @@ MAX_TTL_MIN = 7 * 24 * 60             # 7 days
 
 DROP_ID_RE = re.compile(r"^[A-Za-z0-9_-]{6,32}$")
 TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+PUBLIC_AUDIT_PAYLOAD_FIELDS = {"seq", "drop_id", "event", "timestamp", "prev_hash"}
+PUBLIC_RECEIPT_PAYLOAD_FIELDS = {"drop_id", "outcome", "chain_head_sha256", "shred_state"}
+PUBLIC_AUDIT_ENTRY_FIELDS = {
+    "seq", "event", "prev_hash", "entry_sha256", "payload", "payload_json",
+    "signature_p1363_b64", "signature_der_b64", "key_id", "algorithm",
+}
+PUBLIC_RECEIPT_FIELDS = {
+    "payload", "payload_json", "payload_sha256", "signature_p1363_b64",
+    "signature_der_b64", "key_id", "algorithm", "signed_at",
+}
 
 
 def _response(status: int, body: Dict[str, Any]) -> Dict[str, Any]:
@@ -50,7 +60,7 @@ def _response(status: int, body: Dict[str, Any]) -> Dict[str, Any]:
             "Content-Type": "application/json; charset=utf-8",
             "Cache-Control": "no-store",
             "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "Content-Type,X-ZeroDrop-Human",
+            "Access-Control-Allow-Headers": "Content-Type,X-ZeroDrop-Human,X-ZeroDrop-Claim-Secret",
             "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
         },
         "body": json.dumps(body, default=str),
@@ -393,27 +403,24 @@ def _handle_get_status(drop_id: str, event: Dict[str, Any], headers: Dict[str, s
         "drop_id": drop_id,
         "status": status,
         "mode": item.get("mode", "fast"),
-        "label": item.get("label", ""),
         "has_file": bool(item.get("has_file", False)),
-        "filename": item.get("filename", ""),
-        "file_size": int(item.get("file_size", 0)),
-        "has_passphrase": bool(item.get("passphrase_check")),
-        "passphrase_check": item.get("passphrase_check"),
-        "iv_b64": item.get("iv_b64", "") if item.get("passphrase_check") else "",
-        "quorum": item.get("quorum"),
-        "canary_alert": bool(item.get("canary_alert", False)),
-        "created_at": item.get("created_at", ""),
-        "expires_epoch": ttl_epoch,
-        "burned_at": item.get("burned_at", ""),
         "shred_state": item.get("shred_state", "ACTIVE"),
         "bot_shield_hits": bot_hits,
-        "bot_detected": bot_name,
         "has_receipt": bool(item.get("receipt")) or bool(item.get("audit_chain")),
         "chain_length": len(item.get("audit_chain") or []),
     }
-    if item.get("demo_inbox") and status == "PENDING_APPROVAL" and item.get("demo_approval_url"):
+    claim_secret = headers.get("x-zerodrop-claim-secret", "")
+    expected_claim_hash = str(item.get("claim_secret_hash") or "")
+    has_claim_capability = bool(claim_secret and expected_claim_hash) and hmac.compare_digest(
+        hashlib.sha256(claim_secret.encode("utf-8")).hexdigest(), expected_claim_hash
+    )
+    if (
+        has_claim_capability
+        and item.get("demo_inbox")
+        and status == "PENDING_APPROVAL"
+        and item.get("demo_approval_url")
+    ):
         out["demo_approval_url"] = item["demo_approval_url"]
-        out["demo_approval_token"] = item.get("demo_approval_token", "")
 
     return _response(200, out)
 
@@ -537,14 +544,7 @@ def _handle_claim_drop(drop_id: str, event: Dict[str, Any], headers: Dict[str, s
 
         receipt_payload = {
             "drop_id": drop_id,
-            "label": old_item.get("label", ""),
-            "mode": "fast",
             "outcome": "BURNED_ONCE",
-            "created_at": old_item.get("created_at", ""),
-            "burned_at": now_iso,
-            "claimer_ip_hash": ip_hash,
-            "payload_sha256": old_item.get("payload_sha256", ""),
-            "bot_shield_hits": int(old_item.get("bot_shield_hits", 0)),
             "chain_head_sha256": burn_entry["entry_sha256"],
             "shred_state": "PENDING_FILE_SHRED" if has_file else "SHREDDED",
         }
@@ -581,8 +581,8 @@ def _handle_claim_drop(drop_id: str, event: Dict[str, Any], headers: Dict[str, s
                 "mime_type": old_item.get("mime_type", "application/octet-stream"),
                 "presigned_get_url": presigned_get_url,
                 "file_shred_token": file_shred_token,
-                "receipt": receipt,
-                "audit_chain": existing_chain,
+                "receipt": _public_receipt_data(receipt, existing_chain)[0],
+                "audit_chain": _public_receipt_data(receipt, existing_chain)[1],
             },
         )
 
@@ -751,8 +751,8 @@ def _handle_collect_approved(drop_id: str, event: Dict[str, Any], headers: Dict[
             "filename": filename,
             "mime_type": old_item.get("mime_type", "application/octet-stream"),
             "presigned_get_url": presigned_get_url,
-            "receipt": old_item.get("receipt"),
-            "audit_chain": chain,
+            "receipt": _public_receipt_data(old_item.get("receipt"), chain)[0],
+            "audit_chain": _public_receipt_data(old_item.get("receipt"), chain)[1],
         },
     )
 
@@ -880,12 +880,7 @@ def _handle_owner_panic_shred(drop_id: str, event: Dict[str, Any], headers: Dict
     receipt = sign_receipt(
         {
             "drop_id": drop_id,
-            "label": old_item.get("label", ""),
-            "mode": old_item.get("mode", "fast"),
             "outcome": "OWNER_PANIC_SHREDDED",
-            "created_at": old_item.get("created_at", ""),
-            "shredded_at": now_iso,
-            "actor_ip_hash": ip_hash,
             "chain_head_sha256": kill_entry["entry_sha256"],
             "shred_state": "SHREDDED",
         }
@@ -923,8 +918,8 @@ def _handle_owner_panic_shred(drop_id: str, event: Dict[str, Any], headers: Dict
             "status": "OWNER_SHREDDED",
             "shred_state": "SHREDDED",
             "s3_deleted": s3_deleted,
-            "receipt": receipt,
-            "audit_chain": chain,
+            "receipt": _public_receipt_data(receipt, chain)[0],
+            "audit_chain": _public_receipt_data(receipt, chain)[1],
         },
     )
 
@@ -1017,6 +1012,37 @@ def _handle_post_approval(token: str, event: Dict[str, Any], headers: Dict[str, 
     )
 
 
+def _signed_document_is_public(
+    document: Any,
+    allowed_payload_fields: set[str],
+    allowed_document_fields: set[str],
+) -> bool:
+    if not isinstance(document, dict) or not set(document).issubset(allowed_document_fields):
+        return False
+    payload_json = document.get("payload_json")
+    if not isinstance(payload_json, str):
+        return False
+    try:
+        payload = json.loads(payload_json)
+    except (TypeError, ValueError):
+        return False
+    if not isinstance(payload, dict) or not set(payload).issubset(allowed_payload_fields):
+        return False
+    stored_payload = document.get("payload")
+    return stored_payload is None or stored_payload == payload
+
+
+def _public_receipt_data(receipt: Any, audit_chain: Any) -> Tuple[Any, List[Dict[str, Any]]]:
+    safe_receipt = receipt if receipt and _signed_document_is_public(
+        receipt, PUBLIC_RECEIPT_PAYLOAD_FIELDS, PUBLIC_RECEIPT_FIELDS
+    ) else None
+    safe_chain = audit_chain if isinstance(audit_chain, list) and all(
+        _signed_document_is_public(entry, PUBLIC_AUDIT_PAYLOAD_FIELDS, PUBLIC_AUDIT_ENTRY_FIELDS)
+        for entry in audit_chain
+    ) else []
+    return safe_receipt, safe_chain
+
+
 def _handle_get_receipt(drop_id: str) -> Dict[str, Any]:
     if not DROP_ID_RE.match(drop_id):
         return _response(400, {"error": "INVALID_DROP_ID"})
@@ -1027,6 +1053,15 @@ def _handle_get_receipt(drop_id: str) -> Dict[str, Any]:
     audit_chain = item.get("audit_chain") or []
     if not receipt and not audit_chain:
         return _response(404, {"error": "RECEIPT_NOT_READY", "status": item.get("status", "")})
+    if receipt and not _signed_document_is_public(
+        receipt, PUBLIC_RECEIPT_PAYLOAD_FIELDS, PUBLIC_RECEIPT_FIELDS
+    ):
+        return _response(409, {"error": "RECEIPT_REDACTED_FOR_PRIVACY", "drop_id": drop_id})
+    if not isinstance(audit_chain, list) or any(
+        not _signed_document_is_public(entry, PUBLIC_AUDIT_PAYLOAD_FIELDS, PUBLIC_AUDIT_ENTRY_FIELDS)
+        for entry in audit_chain
+    ):
+        return _response(409, {"error": "RECEIPT_REDACTED_FOR_PRIVACY", "drop_id": drop_id})
     return _response(
         200,
         {
@@ -1158,7 +1193,6 @@ def _handle_get_soc() -> Dict[str, Any]:
                 "total_panic_shreds": int(item.get("total_panic_shreds", 0)),
                 "total_approvals": int(item.get("total_approvals", 0)),
             },
-            "events": item.get("events") or [],
             "updated_at": item.get("updated_at", ""),
             "kms_fingerprint": (get_signing_public_key().get("fingerprint_sha256") or "")[:16],
             "idle_cost_usd": 0.0,

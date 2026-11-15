@@ -258,17 +258,16 @@ def make_chain_entry(
     chain = existing_chain or []
     seq = len(chain) + 1
     prev_hash = chain[-1]["entry_sha256"] if chain else GENESIS_HASH
+    # These signed entries are returned by the public receipt endpoint. Keep
+    # them limited to the minimum verifiable lifecycle facts; caller-supplied
+    # IP hashes, free-text details, and extra metadata stay private.
     body: Dict[str, Any] = {
         "seq": seq,
         "drop_id": drop_id,
         "event": event_name,
         "timestamp": utc_now_iso(),
-        "actor_ip_hash": actor_ip_hash,
-        "detail": detail,
         "prev_hash": prev_hash,
     }
-    if extra:
-        body["meta"] = extra
     signed = sign_receipt(body)
     return {
         "seq": seq,

@@ -925,6 +925,23 @@ function parseQuorumOption(val) {
   return null;
 }
 
+function buildShareUrl(dropId, keyField, keyValue, ivB64, passphraseCheck, quorum) {
+  const params = new URLSearchParams();
+  params.set("d", dropId);
+  params.set(keyField, keyValue);
+  params.set("iv", ivB64);
+  if (passphraseCheck) {
+    params.set("p", "1");
+    params.set("pci", passphraseCheck.iv_b64);
+    params.set("pcc", passphraseCheck.ct_b64);
+  }
+  if (quorum) {
+    params.set("qm", String(quorum.threshold));
+    params.set("qn", String(quorum.total));
+  }
+  return window.location.origin + "/#" + params.toString();
+}
+
 async function createDrop() {
   const errBox = document.getElementById("create-error");
   errBox.classList.add("hidden");
@@ -1016,7 +1033,7 @@ async function createDrop() {
       data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || "Create failed");
     }
-    showCreateSuccess(data, keyB64u, ivB64, payloadHash, Boolean(passphrase), shares, quorum);
+    showCreateSuccess(data, keyB64u, ivB64, payloadHash, Boolean(passphrase), shares, quorum, passphraseCheck);
   } catch (e) {
     errBox.textContent = e.message;
     errBox.classList.remove("hidden");
@@ -1026,12 +1043,15 @@ async function createDrop() {
   }
 }
 
-function showCreateSuccess(data, keyB64u, ivB64, payloadHash, hasPass, shares, quorum) {
+function showCreateSuccess(data, keyB64u, ivB64, payloadHash, hasPass, shares, quorum, passphraseCheck) {
   activeDropId = data.drop_id;
   activeKeyB64u = shares ? "" : keyB64u;
   activeKillToken = data.kill_token || "";
   activeClaimSecret = "";
   activeDecryptedFile = null;
+  activePassphraseRequired = Boolean(hasPass);
+  activePassphraseCheck = passphraseCheck || null;
+  activeDropIvB64 = ivB64;
   activeQuorumMeta = quorum;
   document.getElementById("create-empty").classList.add("hidden");
   document.getElementById("create-result").classList.remove("hidden");
@@ -1042,7 +1062,7 @@ function showCreateSuccess(data, keyB64u, ivB64, payloadHash, hasPass, shares, q
   document.getElementById("panic-shred-status").classList.add("hidden");
 
   if (shares && quorum) {
-    lastShareUrls = shares.map(sh => window.location.origin + "/#d=" + encodeURIComponent(data.drop_id) + "&s=" + encodeURIComponent(sh) + (hasPass ? "&p=1" : ""));
+    lastShareUrls = shares.map(sh => buildShareUrl(data.drop_id, "s", sh, ivB64, passphraseCheck, quorum));
     lastShareUrl = lastShareUrls[0];
     document.getElementById("single-share-wrap").classList.add("hidden");
     document.getElementById("quorum-shares-wrap").classList.remove("hidden");
@@ -1056,7 +1076,7 @@ function showCreateSuccess(data, keyB64u, ivB64, payloadHash, hasPass, shares, q
       </div>`).join("");
   } else {
     lastShareUrls = [];
-    lastShareUrl = window.location.origin + "/#d=" + encodeURIComponent(data.drop_id) + "&k=" + encodeURIComponent(keyB64u) + (hasPass ? "&p=1" : "");
+    lastShareUrl = buildShareUrl(data.drop_id, "k", keyB64u, ivB64, passphraseCheck, null);
     document.getElementById("single-share-wrap").classList.remove("hidden");
     document.getElementById("quorum-shares-wrap").classList.add("hidden");
     document.getElementById("share-url-box").textContent = lastShareUrl;
@@ -1211,16 +1231,11 @@ async function loadDropStatus(dropId) {
 }
 
 function renderStatusMeta(d) {
-  activePassphraseRequired = Boolean(d.has_passphrase);
-  activePassphraseCheck = d.passphrase_check || null;
-  activeDropIvB64 = d.iv_b64 || "";
-  activeQuorumMeta = d.quorum || null;
-
   document.getElementById("u-id").textContent = d.drop_id;
-  document.getElementById("u-label").textContent = d.label + (d.canary_alert ? " [CANARY]" : "");
+  document.getElementById("u-label").textContent = "Private encrypted drop";
   document.getElementById("u-mode").textContent = d.mode === "approval" ? "Break-Glass Approval (Step Functions)" : "Fast Atomic Burn";
   document.getElementById("u-status").textContent = d.status + " (" + (d.shred_state || "ACTIVE") + ")";
-  document.getElementById("u-file").textContent = d.has_file ? (d.filename + " (" + d.file_size + " bytes, encrypted)") : "Text Secret";
+  document.getElementById("u-file").textContent = d.has_file ? "Encrypted file" : "Encrypted text secret";
 
   const protDesc = [];
   if (activeQuorumMeta) protDesc.push(`${activeQuorumMeta.threshold}-of-${activeQuorumMeta.total} Shamir Quorum`);
@@ -1314,6 +1329,7 @@ async function verifyLocalUnlockInputsBeforeBurn(ivB64) {
   const pass = document.getElementById("unlock-passphrase-input").value;
   if (!pass) throw new Error("Passphrase required to unlock this drop.");
   if (!rawKey) throw new Error("Missing decryption key.");
+  if (!activePassphraseCheck || !ivB64) throw new Error("Passphrase check metadata is missing from this share link.");
   const aesKey = await deriveAesKey(rawKey, keyB64u, pass, ivB64);
   if (activePassphraseCheck) {
     try {
@@ -1365,7 +1381,9 @@ async function claimDrop() {
       lightPipeline(["edge", "ddb", "sfn"], "lit-amber");
       document.getElementById("u-status").textContent = "PENDING_APPROVAL";
       document.getElementById("unlock-waiting").classList.remove("hidden");
-      const st = await (await fetch(API + "/api/drops/" + encodeURIComponent(activeDropId) + "/status")).json();
+      const st = await (await fetch(API + "/api/drops/" + encodeURIComponent(activeDropId) + "/status", {
+        headers: { "X-ZeroDrop-Claim-Secret": activeClaimSecret },
+      })).json();
       if (st.demo_approval_url) {
         window.__demoApprovalUrl = st.demo_approval_url;
         document.getElementById("demo-inbox-box").classList.remove("hidden");
@@ -1389,7 +1407,9 @@ function startApprovalPoll() {
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(async () => {
     if (!activeDropId) return;
-    const r = await fetch(API + "/api/drops/" + encodeURIComponent(activeDropId) + "/status");
+    const r = await fetch(API + "/api/drops/" + encodeURIComponent(activeDropId) + "/status", {
+      headers: { "X-ZeroDrop-Claim-Secret": activeClaimSecret },
+    });
     if (!r.ok) return;
     const d = await r.json();
     document.getElementById("u-status").textContent = d.status + " (" + (d.shred_state || "ACTIVE") + ")";
@@ -1989,20 +2009,7 @@ async function loadSocTelemetry() {
     document.getElementById("soc-approvals").textContent = String(c.total_approvals || 0);
 
     const listEl = document.getElementById("soc-events-list");
-    const evs = d.events || [];
-    if (!evs.length) {
-      listEl.textContent = "No security events recorded yet. Create a drop or run the 15-Second Live Proof above!";
-      return;
-    }
-    listEl.innerHTML = evs.map(ev => `
-      <div style="padding:6px 0; border-bottom:1px solid #1b263d; display:flex; flex-wrap:wrap; gap:10px; justify-content:space-between;">
-        <span>
-          <strong style="color:${ev.event.includes('CANARY') || ev.event.includes('PANIC') ? '#fca5a5' : ev.event.includes('BOT') ? '#fde68a' : '#86efac'};">${esc(ev.event)}</strong>
-          &bull; <a href="javascript:void(0)" data-did="${esc(ev.drop_id)}" onclick="auditFromSoc(this.dataset.did)" style="color:var(--accent); text-decoration:underline;">${esc(ev.drop_id)}</a>
-          &bull; ${esc(ev.detail)}
-        </span>
-        <span style="color:var(--muted);">${esc(ev.ts)}${ev.kms_head ? ' • kms:' + esc(ev.kms_head) : ''}</span>
-      </div>`).join("");
+    listEl.textContent = "Per-drop event details are withheld to protect drop metadata. Aggregate counters above remain available.";
   } catch (e) {}
 }
 
@@ -2022,6 +2029,16 @@ function handleHashNavigation() {
     activeDropId = newId;
     activeKeyB64u = params.get("k") || "";
     activeInitialShare = params.get("s") || "";
+    activePassphraseRequired = params.get("p") === "1";
+    activePassphraseCheck = params.has("pci") && params.has("pcc")
+      ? { iv_b64: params.get("pci"), ct_b64: params.get("pcc") }
+      : null;
+    activeDropIvB64 = params.get("iv") || "";
+    const quorumThreshold = Number(params.get("qm") || 0);
+    const quorumTotal = Number(params.get("qn") || 0);
+    activeQuorumMeta = quorumThreshold >= 2 && quorumTotal >= quorumThreshold
+      ? { threshold: quorumThreshold, total: quorumTotal }
+      : null;
     switchTab("unlock");
     loadDropStatus(activeDropId);
   } else if (params.get("review")) {

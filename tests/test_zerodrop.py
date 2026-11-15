@@ -68,6 +68,98 @@ const [spkiB64, sigB64, msg] = process.argv.slice(1);
     return res.stdout.strip() == "TRUE"
 
 
+def test_unlock_metadata_is_carried_in_secret_fragment_not_status() -> None:
+    html = (ROOT / "web" / "index.html").read_text()
+    start = html.index("function buildShareUrl(")
+    end = html.index("\n}\n", start) + 2
+    builder = html[start:end]
+    js = f"""
+globalThis.window = {{ location: {{ origin: "https://zerodrop.example" }} }};
+{builder}
+const url = new URL(buildShareUrl(
+  "drop123", "k", "url-key", "drop-iv",
+  {{ iv_b64: "check-iv", ct_b64: "check-ct" }},
+  {{ threshold: 2, total: 3 }}
+));
+if (url.search) throw new Error("metadata must not be sent as query parameters");
+const params = new URLSearchParams(url.hash.slice(1));
+for (const [key, expected] of Object.entries({{
+  d: "drop123", k: "url-key", iv: "drop-iv", p: "1",
+  pci: "check-iv", pcc: "check-ct", qm: "2", qn: "3"
+}})) {{
+  if (params.get(key) !== expected) throw new Error(`bad ${{key}} fragment value`);
+}}
+"""
+    subprocess.run(["node", "-e", js], check=True, capture_output=True, text=True)
+    assert "activePassphraseCheck = d.passphrase_check" not in html
+    assert "activeDropIvB64 = d.iv_b64" not in html
+
+
+def test_receipt_endpoint_fails_closed_on_legacy_private_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+    legacy_receipt_payload = {
+        "drop_id": "legacy123",
+        "label": "PRIVATE_LABEL_SHOULD_NOT_LEAK",
+        "outcome": "BURNED_ONCE",
+        "claimer_ip_hash": "PRIVATE_IP_HASH_SHOULD_NOT_LEAK",
+    }
+    legacy_entry_payload = {
+        "seq": 1,
+        "drop_id": "legacy123",
+        "event": "DROP_CREATED",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "prev_hash": "0" * 64,
+        "actor_ip_hash": "PRIVATE_ACTOR_HASH_SHOULD_NOT_LEAK",
+        "detail": "PRIVATE_DETAIL_SHOULD_NOT_LEAK",
+        "meta": {"payload_sha256": "PRIVATE_CONTENT_HASH_SHOULD_NOT_LEAK"},
+    }
+    legacy_rows = [
+        {
+            "drop_id": "legacy123",
+            "receipt": {
+                "payload": legacy_receipt_payload,
+                "payload_json": json.dumps(legacy_receipt_payload),
+                "payload_sha256": "0" * 64,
+                "signature_p1363_b64": "",
+                "key_id": "legacy",
+                "algorithm": "ECDSA_P256_SHA256",
+                "signed_at": "2026-01-01T00:00:00Z",
+            },
+            "audit_chain": [],
+        },
+        {
+            "drop_id": "legacy123",
+            "audit_chain": [{
+                "seq": 1,
+                "event": "DROP_CREATED",
+                "prev_hash": "0" * 64,
+                "entry_sha256": "0" * 64,
+                "payload": legacy_entry_payload,
+                "payload_json": json.dumps(legacy_entry_payload),
+                "signature_p1363_b64": "",
+                "key_id": "legacy",
+                "algorithm": "ECDSA_P256_SHA256",
+            }],
+        },
+    ]
+
+    class FakeTable:
+        def __init__(self, row: dict) -> None:
+            self.row = row
+
+        def get_item(self, **_kwargs: object) -> dict:
+            return {"Item": self.row}
+
+    for row in legacy_rows:
+        monkeypatch.setattr(api_handler, "aws_table", lambda row=row: FakeTable(row))
+        response = api_handler._handle_get_receipt("legacy123")
+        body = json.loads(response["body"])
+        assert response["statusCode"] == 409
+        assert body["error"] == "RECEIPT_REDACTED_FOR_PRIVACY"
+        rendered = json.dumps(body)
+        assert "PRIVATE_" not in rendered
+        assert "payload_sha256" not in rendered
+
+
 def test_sam_asl_loggroups_and_cloudwatch_dashboard() -> None:
     asl = json.loads((ROOT / "statemachine" / "approval_shred.asl.json").read_text())
     assert asl["StartAt"] == "NotifyAndAwaitApproval"
@@ -141,6 +233,7 @@ def test_fast_burn_bot_shield_and_hash_chained_kms_ledger() -> None:
             "ciphertext_b64": base64.b64encode(b"X" * 32).decode(),
             "payload_sha256": "deadbeef" * 8,
             "canary_alert": True,
+            "quorum": {"threshold": 2, "total": 3},
             "passphrase_check": {
                 "iv_b64": base64.b64encode(b"999999999999").decode(),
                 "ct_b64": base64.b64encode(b"X" * 32).decode(),
@@ -166,8 +259,12 @@ def test_fast_burn_bot_shield_and_hash_chained_kms_ledger() -> None:
     st_peek, peek = _call_api("GET", f"/api/drops/{drop_id}/status")
     assert st_peek == 200
     assert peek["status"] == "READY"
-    assert peek["has_passphrase"] is True
-    assert peek["iv_b64"] != ""
+    for private_field in (
+        "has_passphrase", "passphrase_check", "iv_b64", "quorum", "label",
+        "filename", "file_size", "canary_alert", "payload_sha256", "bot_detected",
+    ):
+        assert private_field not in peek
+    assert base64.b64encode(b"X" * 32).decode() not in json.dumps(peek)
     assert peek["bot_shield_hits"] == 1
     assert peek["chain_length"] == 2
 
@@ -196,6 +293,13 @@ def test_fast_burn_bot_shield_and_hash_chained_kms_ledger() -> None:
     spki = rc["public_key"]["spki_b64"]
     chain = rc["audit_chain"]
     assert [e["event"] for e in chain] == ["DROP_CREATED", "BOT_SHIELD_BLOCKED", "BURNED_ONCE"]
+    receipt_payload = json.loads(rc["receipt"]["payload_json"])
+    assert set(receipt_payload) == {"drop_id", "outcome", "chain_head_sha256", "shred_state"}
+    assert not {"label", "claimer_ip_hash", "payload_sha256", "bot_shield_hits"} & set(receipt_payload)
+    for entry in chain:
+        signed_payload = json.loads(entry["payload_json"])
+        assert set(signed_payload) == {"seq", "drop_id", "event", "timestamp", "prev_hash"}
+        assert not {"actor_ip_hash", "detail", "meta"} & set(signed_payload)
 
     expected_prev = "0" * 64
     for entry in chain:
@@ -206,7 +310,7 @@ def test_fast_burn_bot_shield_and_hash_chained_kms_ledger() -> None:
         expected_prev = recomputed
 
     # Tamper 1 char in entry #1 -> signature fails AND downstream chain link breaks!
-    tampered_e1 = chain[0]["payload_json"].replace("Created", "Altered")
+    tampered_e1 = chain[0]["payload_json"].replace("DROP_CREATED", "DROP_MODIFIED")
     assert _verify_p1363_with_node(spki, chain[0]["signature_p1363_b64"], tampered_e1) is False
     tampered_hash = hashlib.sha256(tampered_e1.encode("utf-8")).hexdigest()
     assert chain[1]["prev_hash"] != tampered_hash
@@ -302,9 +406,23 @@ def test_step_functions_approval_and_deny_flows() -> None:
     assert st_req == 202
     claim_secret = req_data["claim_secret"]
 
-    _, peek = _call_api("GET", f"/api/drops/{drop_id}/status")
-    approval_token = peek["demo_approval_token"]
+    _, anonymous_peek = _call_api("GET", f"/api/drops/{drop_id}/status")
+    assert "demo_approval_url" not in anonymous_peek
+    assert "demo_approval_token" not in anonymous_peek
+    _, invalid_peek = _call_api(
+        "GET",
+        f"/api/drops/{drop_id}/status",
+        headers={"X-ZeroDrop-Claim-Secret": "wrong-capability"},
+    )
+    assert "demo_approval_url" not in invalid_peek
+    _, peek = _call_api(
+        "GET",
+        f"/api/drops/{drop_id}/status",
+        headers={"X-ZeroDrop-Claim-Secret": claim_secret},
+    )
     assert peek["demo_approval_url"].startswith("http://127.0.0.1:8787/#review=")
+    assert "demo_approval_token" not in peek
+    approval_token = peek["demo_approval_url"].split("#review=", 1)[1]
     assert "attacker.example" not in peek["demo_approval_url"]
 
     st_rev, rev = _call_api("GET", f"/api/approvals/{approval_token}")
@@ -339,9 +457,14 @@ def test_step_functions_approval_and_deny_flows() -> None:
         },
     )
     d2 = c2["drop_id"]
-    _call_api("POST", f"/api/drops/{d2}/claim", {"human_confirm": True}, headers={"User-Agent": "Mozilla/5.0", "X-ZeroDrop-Human": "1"})
-    _, p2 = _call_api("GET", f"/api/drops/{d2}/status")
-    _call_api("POST", f"/api/approvals/{p2['demo_approval_token']}", {"decision": "DENY"})
+    _, req2 = _call_api("POST", f"/api/drops/{d2}/claim", {"human_confirm": True}, headers={"User-Agent": "Mozilla/5.0", "X-ZeroDrop-Human": "1"})
+    _, p2 = _call_api(
+        "GET",
+        f"/api/drops/{d2}/status",
+        headers={"X-ZeroDrop-Claim-Secret": req2["claim_secret"]},
+    )
+    approval_token2 = p2["demo_approval_url"].split("#review=", 1)[1]
+    _call_api("POST", f"/api/approvals/{approval_token2}", {"decision": "DENY"})
     _, p2_after = _call_api("GET", f"/api/drops/{d2}/status")
     assert p2_after["status"] == "DENIED_SHREDDED"
 
@@ -435,8 +558,13 @@ def test_file_shred_and_approval_grace_expiry() -> None:
     )
     d2 = c2["drop_id"]
     _, req2 = _call_api("POST", f"/api/drops/{d2}/claim", {"human_confirm": True}, headers={"X-ZeroDrop-Human": "1"})
-    _, p2 = _call_api("GET", f"/api/drops/{d2}/status")
-    _call_api("POST", f"/api/approvals/{p2['demo_approval_token']}", {"decision": "APPROVE"})
+    _, p2 = _call_api(
+        "GET",
+        f"/api/drops/{d2}/status",
+        headers={"X-ZeroDrop-Claim-Secret": req2["claim_secret"]},
+    )
+    approval_token = p2["demo_approval_url"].split("#review=", 1)[1]
+    _call_api("POST", f"/api/approvals/{approval_token}", {"decision": "APPROVE"})
     time.sleep(0.25)
     st_late, late = _call_api("POST", f"/api/drops/{d2}/collect", {"claim_secret": req2["claim_secret"]})
     assert st_late == 410 and late["error"] == "ALREADY_SHREDDED"
@@ -527,4 +655,6 @@ process.stdout.write(out.toString('hex'));
     assert soc["counters"]["total_created"] >= 1
     assert soc["counters"]["total_panic_shreds"] >= 1
     assert soc["counters"]["total_approvals"] >= 1
-    assert any(e["event"] == "OWNER_PANIC_SHREDDED" and e["drop_id"] == drop_id for e in soc["events"])
+    assert "events" not in soc
+    assert drop_id not in json.dumps(soc)
+    assert "actor_ip_hash" not in json.dumps(soc)

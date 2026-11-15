@@ -240,6 +240,7 @@ Resources:
         AllowHeaders:
           - Content-Type
           - X-ZeroDrop-Human
+          - X-ZeroDrop-Claim-Secret
       DefaultRouteSettings:
         ThrottlingBurstLimit: 50
         ThrottlingRateLimit: 25

@@ -107,14 +107,7 @@ def _handle_release_and_sign(event: Dict[str, Any]) -> Dict[str, Any]:
 
     receipt_payload = {
         "drop_id": drop_id,
-        "label": label,
-        "mode": "approval",
         "outcome": "OWNER_APPROVED_UNLOCK",
-        "created_at": item.get("created_at", ""),
-        "approved_at": now_iso,
-        "requester_ip_hash": requester_ip_hash,
-        "payload_sha256": item.get("payload_sha256", ""),
-        "bot_shield_hits": int(item.get("bot_shield_hits", 0)),
         "chain_head_sha256": approved_entry["entry_sha256"],
         "shred_state": "GRACE_SHRED_SCHEDULED",
     }

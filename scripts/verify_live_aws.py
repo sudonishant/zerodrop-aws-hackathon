@@ -118,9 +118,14 @@ def main() -> None:
 
     approval_tok = ""
     for _ in range(10):
-        _, st_peek, _ = req("GET", f"{base}/api/drops/{bg_id}/status")
-        if st_peek.get("demo_approval_token"):
-            approval_tok = st_peek["demo_approval_token"]
+        _, st_peek, _ = req(
+            "GET",
+            f"{base}/api/drops/{bg_id}/status",
+            headers={"X-ZeroDrop-Claim-Secret": claim_secret},
+        )
+        approval_url = st_peek.get("demo_approval_url", "")
+        if "#review=" in approval_url:
+            approval_tok = approval_url.split("#review=", 1)[1]
             break
         time.sleep(0.3)
     assert approval_tok, "Step Functions did not publish approval token in time"
