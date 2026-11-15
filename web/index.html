@@ -1154,10 +1154,9 @@ async function copyShareUrl(btnEl) {
 }
 
 function openGeneratedDrop() {
-  if (!activeDropId) return;
+  if (!activeDropId || !lastShareUrl.includes("#")) return;
   activeInitialShare = "";
-  const suffix = document.getElementById("res-pass").textContent.includes("PBKDF2") ? "&p=1" : "";
-  window.location.hash = "d=" + encodeURIComponent(activeDropId) + "&k=" + encodeURIComponent(activeKeyB64u) + suffix;
+  window.location.hash = lastShareUrl.split("#")[1];
   handleHashNavigation();
 }
 

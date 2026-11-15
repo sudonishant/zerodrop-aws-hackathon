@@ -93,6 +93,11 @@ for (const [key, expected] of Object.entries({{
     subprocess.run(["node", "-e", js], check=True, capture_output=True, text=True)
     assert "activePassphraseCheck = d.passphrase_check" not in html
     assert "activeDropIvB64 = d.iv_b64" not in html
+    open_start = html.index("function openGeneratedDrop()")
+    open_end = html.index("\n}\n", open_start) + 2
+    open_helper = html[open_start:open_end]
+    assert 'window.location.hash = lastShareUrl.split("#")[1];' in open_helper
+    assert "const suffix =" not in open_helper
 
 
 def test_receipt_endpoint_fails_closed_on_legacy_private_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
