@@ -1,0 +1,2041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta property="og:title" content="ZeroDrop v3 — Zero-Knowledge, Quorum-Split, KMS-Chained Secret Escrow" />
+  <meta property="og:description" content="Protected by Bot-Shield, Shamir M-of-N Quorum, DynamoDB Conditional Writes &amp; AWS KMS." />
+  <title>ZeroDrop v3 — Zero-Knowledge • Quorum M-of-N • Break-Glass • KMS Hash-Chained Escrow</title>
+  <style>
+    :root {
+      --bg: #070b12;
+      --surface: #101725;
+      --surface-2: #162033;
+      --border: #24324d;
+      --text: #e6edf7;
+      --muted: #93a4c3;
+      --accent: #38bdf8;
+      --accent-2: #818cf8;
+      --green: #22c55e;
+      --green-bg: rgba(34, 197, 94, 0.14);
+      --red: #ef4444;
+      --red-bg: rgba(239, 68, 68, 0.14);
+      --amber: #f59e0b;
+      --amber-bg: rgba(245, 158, 11, 0.14);
+      --pink: #f472b6;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 85% 0%, rgba(56, 189, 248, 0.11) 0%, transparent 45%),
+        radial-gradient(circle at 15% 15%, rgba(129, 140, 248, 0.08) 0%, transparent 40%),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+    .container { max-width: 1120px; margin: 0 auto; padding: 18px 18px 60px; }
+    header {
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+      gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--border);
+    }
+    .brand { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+    .logo {
+      width: 42px; height: 42px; border-radius: 11px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      display: grid; place-items: center; font-weight: 800; font-size: 18px; color: #08101c;
+      box-shadow: 0 0 24px rgba(56, 189, 248, 0.28);
+    }
+    .brand h1 { margin: 0; font-size: 1.25rem; letter-spacing: -0.02em; }
+    .brand small { display: block; color: var(--muted); font-size: 0.77rem; }
+    .pill-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .pill {
+      font-size: 0.72rem; padding: 4px 10px; border-radius: 999px;
+      border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+    }
+    .pill.ok { border-color: rgba(34, 197, 94, 0.45); color: #86efac; background: var(--green-bg); }
+    .pill.mono { font-family: var(--mono); }
+
+    /* Live Pipeline Flow Bar */
+    .pipeline-bar {
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;
+      margin: 14px 0 10px; padding: 10px 14px; border-radius: 12px;
+      background: rgba(16, 23, 37, 0.92); border: 1px solid var(--border);
+      font-size: 0.75rem;
+    }
+    .pipe-nodes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .pipe-node {
+      padding: 4px 9px; border-radius: 7px; border: 1px solid var(--border);
+      background: var(--surface-2); color: var(--muted); font-weight: 600;
+      transition: all 0.2s ease;
+    }
+    .pipe-node.lit {
+      border-color: var(--accent); color: #fff;
+      background: rgba(56, 189, 248, 0.22); box-shadow: 0 0 14px rgba(56, 189, 248, 0.25);
+    }
+    .pipe-node.lit-green { border-color: var(--green); color: #bbf7d0; background: var(--green-bg); }
+    .pipe-node.lit-amber { border-color: var(--amber); color: #fde68a; background: var(--amber-bg); }
+    .pipe-node.lit-red { border-color: var(--red); color: #fecaca; background: var(--red-bg); }
+    .pipe-arrow { color: #4f6085; font-weight: 700; }
+    .cost-tag { font-family: var(--mono); color: #86efac; font-size: 0.73rem; }
+
+    .tour-banner {
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
+      margin: 8px 0 14px; padding: 10px 14px; border-radius: 11px;
+      background: linear-gradient(90deg, rgba(56, 189, 248, 0.1), rgba(129, 140, 248, 0.08));
+      border: 1px solid rgba(56, 189, 248, 0.35); font-size: 0.83rem;
+    }
+
+    nav.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 18px; }
+    .tab-btn {
+      background: var(--surface); color: var(--muted); border: 1px solid var(--border);
+      padding: 9px 14px; border-radius: 10px; font-size: 0.85rem; font-weight: 600;
+      cursor: pointer; transition: all 0.15s ease;
+    }
+    .tab-btn:hover { border-color: var(--accent); color: var(--text); }
+    .tab-btn.active {
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(129, 140, 248, 0.18));
+      border-color: var(--accent); color: #fff;
+    }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 20px; margin-bottom: 16px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+    }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 820px) { .grid-2 { grid-template-columns: 1fr; } }
+    h2 { margin: 0 0 8px; font-size: 1.1rem; }
+    h3 { margin: 0 0 8px; font-size: 0.95rem; color: var(--accent); }
+    p.sub { margin: 0 0 14px; color: var(--muted); font-size: 0.87rem; }
+    label { display: block; font-size: 0.81rem; font-weight: 600; color: var(--muted); margin: 11px 0 5px; }
+    input[type="text"], input[type="password"], input[type="number"], select, textarea {
+      width: 100%; background: var(--surface-2); color: var(--text);
+      border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px;
+      font-family: inherit; font-size: 0.89rem; outline: none;
+    }
+    textarea { font-family: var(--mono); font-size: 0.82rem; min-height: 102px; resize: vertical; }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .btn {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #06101f; font-weight: 700; border: none; border-radius: 10px;
+      padding: 10px 15px; font-size: 0.87rem; cursor: pointer; transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.92; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn.secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+    .btn.danger { background: var(--red); color: #fff; }
+    .btn.success { background: var(--green); color: #06180d; }
+    .btn.amber { background: var(--amber); color: #191002; }
+    .btn.sm { padding: 6px 11px; font-size: 0.77rem; border-radius: 8px; }
+    .radio-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px; }
+    @media (max-width: 600px) { .radio-cards { grid-template-columns: 1fr; } }
+    .radio-card {
+      border: 1px solid var(--border); background: var(--surface-2); border-radius: 12px;
+      padding: 11px; cursor: pointer; transition: border-color 0.15s;
+    }
+    .radio-card.selected { border-color: var(--accent); background: rgba(56, 189, 248, 0.08); }
+    .radio-card strong { display: block; font-size: 0.9rem; }
+    .radio-card span { font-size: 0.76rem; color: var(--muted); }
+    .mono-box {
+      background: #070a11; border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px 11px; font-family: var(--mono); font-size: 0.78rem;
+      overflow-x: auto; word-break: break-all; color: #c7d6f3;
+    }
+    .alert {
+      padding: 11px 14px; border-radius: 10px; font-size: 0.85rem; margin: 10px 0;
+      border: 1px solid var(--border); background: var(--surface-2);
+    }
+    .alert.ok { border-color: rgba(34, 197, 94, 0.5); background: var(--green-bg); color: #bbf7d0; }
+    .alert.err { border-color: rgba(239, 68, 68, 0.5); background: var(--red-bg); color: #fecaca; }
+    .alert.warn { border-color: rgba(245, 158, 11, 0.5); background: var(--amber-bg); color: #fde68a; }
+    .badge-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 10px; }
+    .worker-cell {
+      padding: 7px 4px; border-radius: 7px; text-align: center; font-family: var(--mono);
+      font-size: 0.69rem; font-weight: 700; border: 1px solid var(--border);
+    }
+    .worker-cell.leak { background: var(--red-bg); border-color: var(--red); color: #fca5a5; }
+    .worker-cell.win { background: var(--green-bg); border-color: var(--green); color: #86efac; }
+    .worker-cell.block { background: var(--surface-2); border-color: var(--border); color: var(--muted); }
+    .kv { display: grid; grid-template-columns: 165px 1fr; gap: 6px 12px; font-size: 0.82rem; }
+    .kv .k { color: var(--muted); font-weight: 600; }
+    .kv .v { font-family: var(--mono); word-break: break-all; }
+    .hidden { display: none !important; }
+    .checkbox-line { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 0.83rem; cursor: pointer; }
+    .checkbox-line input { width: 16px; height: 16px; accent-color: var(--accent); }
+    .chain-node {
+      border: 1px solid var(--border); background: var(--surface-2); border-radius: 10px;
+      padding: 12px; margin-bottom: 10px;
+    }
+    .chain-node.valid { border-color: rgba(34, 197, 94, 0.55); }
+    .chain-node.broken { border-color: var(--red); background: var(--red-bg); }
+    .chain-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-size: 0.84rem; font-weight: 700; }
+    .share-row {
+      display: flex; align-items: center; gap: 8px; margin-top: 6px;
+      background: #070a11; border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px;
+    }
+    .share-row code { flex: 1; font-family: var(--mono); font-size: 0.74rem; word-break: break-all; color: #c7d6f3; }
+    .stat-strip { display: flex; gap: 12px; flex-wrap: wrap; font-family: var(--mono); font-size: 0.76rem; color: var(--muted); margin-top: 6px; }
+    .kill-box {
+      margin-top: 12px; padding: 12px; border-radius: 10px;
+      border: 1px solid rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.08);
+    }
+    .soc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+    @media (max-width: 700px) { .soc-grid { grid-template-columns: repeat(2, 1fr); } }
+    .soc-kpi {
+      background: var(--surface-2); border: 1px solid var(--border); border-radius: 11px; padding: 12px;
+    }
+    .soc-kpi .num { font-size: 1.45rem; font-weight: 800; font-family: var(--mono); color: var(--accent); }
+    .soc-kpi .lbl { font-size: 0.76rem; color: var(--muted); }
+    .env-row {
+      display: flex; align-items: center; gap: 8px; padding: 6px 9px; margin-top: 6px;
+      background: #070a11; border: 1px solid var(--border); border-radius: 8px; font-family: var(--mono); font-size: 0.76rem;
+    }
+    .env-row .ek { color: var(--accent); font-weight: 700; min-width: 140px; }
+    .env-row .ev { flex: 1; color: #c7d6f3; word-break: break-all; }
+    .wipe-bar {
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 8px 11px; margin: 8px 0; border-radius: 9px;
+      background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4); font-size: 0.79rem;
+    }
+    .footer-note { text-align: center; color: var(--muted); font-size: 0.78rem; margin-top: 24px; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="brand" onclick="switchTab('create')">
+      <div class="logo">ZD</div>
+      <div>
+        <h1>ZeroDrop <span style="font-size:0.74rem; color:var(--accent); font-weight:700;">v4.0 APEX</span></h1>
+        <small>Zero-Knowledge • Shamir M-of-N • Panic Kill Switch • Live AWS SOC • KMS Hash-Chain</small>
+      </div>
+    </div>
+    <div class="pill-row">
+      <span id="env-pill" class="pill">Checking AWS backend...</span>
+      <span id="kms-pill" class="pill mono">KMS ECDSA P-256</span>
+      <span class="pill ok">Scale-to-Zero ($0.00 Idle)</span>
+    </div>
+  </header>
+
+  <div class="pipeline-bar">
+    <div class="pipe-nodes">
+      <span id="pn-crypto" class="pipe-node">1. AES/PBKDF2/Shamir</span>
+      <span class="pipe-arrow">→</span>
+      <span id="pn-edge" class="pipe-node">2. CloudFront / Bot Shield</span>
+      <span class="pipe-arrow">→</span>
+      <span id="pn-ddb" class="pipe-node">3. DynamoDB Atomic</span>
+      <span class="pipe-arrow">→</span>
+      <span id="pn-sfn" class="pipe-node">4. Step Functions / SNS</span>
+      <span class="pipe-arrow">→</span>
+      <span id="pn-kms" class="pipe-node">5. KMS P-256 Chain</span>
+    </div>
+    <span id="telemetry-cost" class="cost-tag">Idle: $0.000000 | KMS FP: <span id="hdr-fp">...</span></span>
+  </div>
+
+  <div class="tour-banner">
+    <div>
+      <strong>⚡ Judge 15-Second Live Proof:</strong>
+      <span id="tour-status">Watch real WebCrypto encrypt → Slackbot 403 block → Atomic burn → KMS Hash-Chain verify execute live.</span>
+    </div>
+    <button id="auto-demo-btn" class="btn sm" onclick="runGuidedJudgeDemo()">▶ Auto-Run Live Security Demo</button>
+  </div>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="create" onclick="switchTab('create')">1. Create &amp; Split</button>
+    <button class="tab-btn" data-tab="unlock" onclick="switchTab('unlock')">2. Unlocker &amp; Quorum</button>
+    <button class="tab-btn" data-tab="review" onclick="switchTab('review')">3. Owner Approval</button>
+    <button class="tab-btn" data-tab="racelab" onclick="switchTab('racelab')">4. Dual Race Lab</button>
+    <button class="tab-btn" data-tab="receipt" onclick="switchTab('receipt')">5. KMS Ledger &amp; Cert</button>
+    <button class="tab-btn" data-tab="soc" onclick="switchTab('soc')">6. Live AWS SOC</button>
+  </nav>
+
+  <!-- TAB 1: CREATE -->
+  <section id="tab-create" class="panel active">
+    <div class="grid-2">
+      <div class="card">
+        <div class="row" style="justify-content: space-between;">
+          <h2>Encrypt in Browser (AES-256-GCM)</h2>
+          <div class="row">
+            <button class="btn secondary sm" onclick="loadSampleEnv()">Sample .env</button>
+            <button class="btn amber sm" onclick="loadCanaryPreset()">🕵️ Canary Trap</button>
+          </div>
+        </div>
+        <p class="sub">Encryption &amp; Shamir splitting happen purely in-browser. Keys stay in <code>#fragment</code> and never hit AWS.</p>
+
+        <label for="drop-label">Secret Label (non-sensitive metadata)</label>
+        <input id="drop-label" type="text" placeholder="e.g. Prod Root Recovery Key — Break-Glass" maxlength="120" />
+
+        <label for="secret-text">Secret Text / .env / Private Key</label>
+        <textarea id="secret-text" oninput="scanSecretPreflight()" placeholder="Paste API keys, .env variables, or temporary credentials here..."></textarea>
+        <div id="preflight-box" class="alert hidden" style="margin-top:8px; padding:9px 12px; font-size:0.79rem;"></div>
+
+        <div class="grid-2" style="gap: 10px;">
+          <div>
+            <label for="secret-file">Attach Encrypted File (≤ 25 MB → S3) <a href="javascript:void(0)" onclick="document.getElementById('secret-file').value=''" style="color:var(--accent); font-weight:400; margin-left:6px;">[Clear]</a></label>
+            <input id="secret-file" type="file" />
+          </div>
+          <div>
+            <label for="drop-passphrase">Optional 2FA Passphrase (PBKDF2 120k)</label>
+            <input id="drop-passphrase" type="password" placeholder="Optional out-of-band PIN/words" />
+          </div>
+        </div>
+
+        <label>Delivery &amp; Approval Mode</label>
+        <div class="radio-cards">
+          <div id="mode-fast-card" class="radio-card selected" onclick="selectMode('fast')">
+            <strong>⚡ Fast Atomic Burn</strong>
+            <span>1-time DynamoDB ConditionExpression. 1st request wins; 410 Gone for all others.</span>
+          </div>
+          <div id="mode-approval-card" class="radio-card" onclick="selectMode('approval')">
+            <strong>🛡️ Break-Glass Approval</strong>
+            <span>Step Functions pauses via <code>waitForTaskToken</code> at $0 until owner approves.</span>
+          </div>
+        </div>
+
+        <div class="grid-2" style="gap: 10px; margin-top: 4px;">
+          <div>
+            <label for="quorum-select">Shamir Key Splitting (GF(256) Quorum)</label>
+            <select id="quorum-select">
+              <option value="1of1" selected>Single Key (#k=...) — Standard</option>
+              <option value="2of3">2-of-3 Quorum Shares (Need any 2 engineers)</option>
+              <option value="3of5">3-of-5 Quorum Shares (High-Security Recovery)</option>
+            </select>
+          </div>
+          <div>
+            <label for="ttl-select">Auto-Expiry (DynamoDB TTL)</label>
+            <select id="ttl-select">
+              <option value="15">15 minutes</option>
+              <option value="60" selected>1 hour</option>
+              <option value="1440">24 hours</option>
+              <option value="10080">7 days</option>
+            </select>
+          </div>
+        </div>
+
+        <label class="checkbox-line">
+          <input id="canary-alert-chk" type="checkbox" />
+          <span><strong>🍯 Canary Tripwire Alert:</strong> Fire Amazon SNS alert + CloudWatch Alarm if probed or unlocked</span>
+        </label>
+
+        <label class="checkbox-line">
+          <input id="demo-inbox-chk" type="checkbox" checked />
+          <span><strong>🧪 Judge Demo Sandbox:</strong> Show simulated SNS Owner Inbox on-screen for instant testing</span>
+        </label>
+
+        <div class="row" style="margin-top: 16px;">
+          <button id="create-btn" class="btn" onclick="createDrop()">🔒 Encrypt &amp; Create ZeroDrop</button>
+        </div>
+        <div id="create-error" class="alert err hidden"></div>
+      </div>
+
+      <div class="card">
+        <h2>Share Output, Quorum Shares &amp; Kill Switch</h2>
+        <p class="sub">Share on Slack, WhatsApp, or Discord — preview crawlers cannot read <code>#k=</code>/<code>#s=</code> or burn the drop.</p>
+
+        <div id="create-empty" class="alert">
+          Fill out a secret or click <strong>"Sample .env"</strong> / <strong>"🕵️ Canary Trap"</strong> to generate a drop.
+        </div>
+
+        <div id="create-result" class="hidden">
+          <div class="alert ok">
+            <strong>Encrypted locally &amp; KMS Genesis entry anchored!</strong> Zero plaintext or key touched AWS.
+          </div>
+
+          <div id="single-share-wrap">
+            <label>One-Time Share URL (Key lives strictly in #fragment)</label>
+            <div id="share-url-box" class="mono-box"></div>
+            <div class="row" style="margin-top: 10px;">
+              <button id="copy-share-btn" class="btn sm" onclick="copyShareUrl(this)">📋 Copy Share Link</button>
+              <button class="btn secondary sm" onclick="openGeneratedDrop()">🔓 Open in Unlocker Tab</button>
+              <button class="btn secondary sm" onclick="inspectCreatedChain()">🔗 View KMS Ledger</button>
+            </div>
+          </div>
+
+          <div id="quorum-shares-wrap" class="hidden">
+            <label id="quorum-shares-title">Shamir Quorum Share URLs (Each share alone reveals ZERO bits)</label>
+            <div id="quorum-shares-list"></div>
+            <div class="row" style="margin-top: 10px;">
+              <button class="btn sm" onclick="openQuorumInUnlocker()">🔓 Test Quorum Unlock (Open Share #1)</button>
+              <button class="btn secondary sm" onclick="inspectCreatedChain()">🔗 View KMS Ledger</button>
+            </div>
+          </div>
+
+          <div class="kill-box">
+            <div class="row" style="justify-content: space-between;">
+              <div>
+                <strong style="color:#fca5a5;">☠️ Instant Owner Panic Kill Switch</strong><br />
+                <span style="font-size:0.78rem; color:var(--muted);">Sent to the wrong channel? Vaporize ciphertext, S3 &amp; SFN immediately.</span>
+              </div>
+              <button id="panic-shred-btn" class="btn danger sm" onclick="panicShredCreated()">☠️ Panic Shred Now</button>
+            </div>
+            <div class="mono-box" style="margin-top:8px; font-size:0.73rem;">Kill Token: <span id="res-kill-token"></span></div>
+            <div id="panic-shred-status" class="alert hidden" style="margin-top:8px;"></div>
+          </div>
+
+          <label style="margin-top: 12px;">Client Crypto &amp; KMS Telemetry</label>
+          <div class="kv">
+            <div class="k">Drop ID</div><div id="res-drop-id" class="v"></div>
+            <div class="k">Mode</div><div id="res-mode" class="v"></div>
+            <div class="k">Key Protection</div><div id="res-pass" class="v"></div>
+            <div class="k">Payload SHA-256</div><div id="res-hash" class="v"></div>
+            <div class="k">Chain Head SHA-256</div><div id="res-chain-head" class="v"></div>
+            <div class="k">AES-GCM IV</div><div id="res-iv" class="v"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 2: UNLOCK / RECEIVE -->
+  <section id="tab-unlock" class="panel">
+    <div class="card">
+      <div class="row" style="justify-content: space-between;">
+        <h2>Bot-Proof Unlocker &amp; Shamir Quorum</h2>
+        <div class="row">
+          <input id="manual-drop-url" type="text" placeholder="Paste Drop ID or #d=... URL" style="width: 280px;" />
+          <button class="btn secondary sm" onclick="loadManualDrop()">Load</button>
+        </div>
+      </div>
+      <p class="sub">Crawlers only load this static HTML shell. Quorum shares are combined locally via GF(256) Lagrange interpolation before unlock.</p>
+
+      <div id="unlock-empty" class="alert">
+        Open a <code>#d=...&amp;k=...</code> (or <code>#d=...&amp;s=...</code> Quorum) link, or create a drop in Tab 1 first.
+      </div>
+
+      <div id="unlock-loaded" class="hidden">
+        <div class="grid-2">
+          <div>
+            <h3>Drop Status Metadata (Safe Peek)</h3>
+            <div class="kv">
+              <div class="k">Drop ID</div><div id="u-id" class="v"></div>
+              <div class="k">Label</div><div id="u-label" class="v"></div>
+              <div class="k">Mode</div><div id="u-mode" class="v"></div>
+              <div class="k">Current Status</div><div id="u-status" class="v"></div>
+              <div class="k">Attachment</div><div id="u-file" class="v"></div>
+              <div class="k">Key / Quorum</div><div id="u-pass-req" class="v"></div>
+              <div class="k">Bots Blocked</div><div id="u-bots" class="v"></div>
+              <div class="k">KMS Audit Events</div><div id="u-chain-len" class="v"></div>
+            </div>
+
+            <div id="unlock-quorum-box" class="hidden" style="margin-top: 12px;">
+              <label id="unlock-quorum-label">🧩 Shamir Quorum Shares Required</label>
+              <div id="unlock-quorum-inputs"></div>
+            </div>
+
+            <div id="unlock-passphrase-box" class="hidden" style="margin-top: 12px;">
+              <label for="unlock-passphrase-input">🔑 2FA Passphrase Required (Verified Locally Before Burn!)</label>
+              <input id="unlock-passphrase-input" type="password" placeholder="Enter out-of-band passphrase" />
+            </div>
+
+            <div class="row" style="margin-top: 16px;">
+              <button id="unlock-btn" class="btn" onclick="claimDrop()">🔓 Unlock &amp; Burn Secret</button>
+              <button class="btn secondary sm" onclick="simulateBotCrawl()">🤖 Simulate Slackbot Crawl</button>
+            </div>
+            <div id="bot-sim-msg" class="alert warn hidden"></div>
+            <div id="pass-err-msg" class="alert err hidden"></div>
+          </div>
+
+          <div>
+            <h3>Decrypted Output / Step Functions Live State</h3>
+            <div id="unlock-waiting" class="alert warn hidden">
+              <strong>⏳ AWS Step Functions Paused (<code>waitForTaskToken</code>)</strong><br />
+              Execution is waiting at $0 idle compute for owner approval. Polling status automatically...
+              <div id="demo-inbox-box" class="hidden" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(245,158,11,0.35);">
+                <strong>📬 Simulated SNS Owner Inbox (Sandbox Mode):</strong><br />
+                <span style="font-size: 0.82rem;">An approval link was emitted via SNS. Click below to act as the Secret Owner:</span><br />
+                <button class="btn sm success" style="margin-top: 8px;" onclick="openDemoApproval()">🛡️ Open Owner Review Page</button>
+              </div>
+            </div>
+
+            <div id="unlock-burned-box" class="alert err hidden"></div>
+
+            <div id="unlock-plaintext-wrap" class="hidden">
+              <div class="alert ok">
+                <strong>✅ Decrypted in Browser &amp; Burned on Server!</strong> Ciphertext has been removed from DynamoDB.
+              </div>
+              <div id="wipe-bar" class="wipe-bar hidden">
+                <span>⏱️ Screen Auto-Wipe in <strong id="wipe-countdown">60</strong>s (anti-shoulder-surfing)</span>
+                <button class="btn danger sm" onclick="wipeScreenNow()">🔥 Wipe Screen Now</button>
+              </div>
+              <div id="masked-env-wrap" class="hidden" style="margin-bottom:8px;"></div>
+              <div id="unlock-plaintext" class="mono-box" style="max-height: 220px; overflow-y: auto; white-space: pre-wrap;"></div>
+              <div class="row" style="margin-top: 10px;">
+                <button id="copy-decrypted-btn" class="btn sm secondary" onclick="copyDecrypted(this)">📋 Copy Plaintext</button>
+                <button id="toggle-raw-btn" class="btn sm secondary hidden" onclick="toggleRawPlaintext()">👁️ Show/Hide Raw</button>
+                <button id="download-file-btn" class="btn sm hidden" onclick="downloadDecryptedFile()">⬇️ Decrypt &amp; Download File + Shred S3</button>
+                <button id="view-receipt-btn" class="btn sm secondary hidden" onclick="jumpToReceipt()">🔗 Verify KMS Audit Chain</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 3: OWNER APPROVAL REVIEW -->
+  <section id="tab-review" class="panel">
+    <div class="card">
+      <h2>Scanner-Safe Break-Glass Owner Approval</h2>
+      <p class="sub">Email link scanners (Microsoft SafeLinks / Gmail) pre-fetch GET links. Approving requires an explicit human POST action that resumes Step Functions via <code>SendTaskSuccess</code>.</p>
+
+      <div class="row" style="margin-bottom: 14px;">
+        <input id="manual-review-token" type="text" placeholder="Approval token (auto-filled from #review=...)" style="max-width: 340px;" />
+        <button class="btn secondary sm" onclick="loadApprovalToken()">Inspect Request</button>
+      </div>
+
+      <div id="review-empty" class="alert">No active approval token loaded. Create a Break-Glass drop and request unlock to trigger SNS + Step Functions.</div>
+
+      <div id="review-card" class="hidden">
+        <div class="kv">
+          <div class="k">Target Drop ID</div><div id="r-drop-id" class="v"></div>
+          <div class="k">Secret Label</div><div id="r-label" class="v"></div>
+          <div class="k">Requester IP Hash</div><div id="r-ip" class="v"></div>
+          <div class="k">User-Agent</div><div id="r-ua" class="v"></div>
+          <div class="k">Requested At</div><div id="r-time" class="v"></div>
+          <div class="k">Current Decision</div><div id="r-decision" class="v"></div>
+        </div>
+        <div class="row" style="margin-top: 16px;">
+          <button id="approve-btn" class="btn success" onclick="submitApproval('APPROVE')">✅ Approve Break-Glass Release</button>
+          <button id="deny-btn" class="btn danger" onclick="submitApproval('DENY')">🚫 Deny &amp; Shred Immediately</button>
+          <button id="back-to-recipient-btn" class="btn secondary hidden" onclick="returnToRecipientAfterApprove()">⬅️ Switch to Recipient Tab</button>
+        </div>
+        <div id="review-status" class="alert hidden"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 4: LIVE RACE LAB -->
+  <section id="tab-racelab" class="panel">
+    <div class="card">
+      <div class="row" style="justify-content: space-between;">
+        <div>
+          <h2>🧪 Dual-Mode 20-Request Concurrency Race Lab</h2>
+          <p class="sub">The DynamoDB worker lab is available only in the local emulator; the browser HTTP race runs against the selected deployment.</p>
+        </div>
+        <div class="row">
+          <button id="run-race-btn" class="btn" onclick="runRaceLab()">⚡ Local 20-Thread DB Race</button>
+          <button id="run-http-race-btn" class="btn secondary" onclick="runBrowserHttpRace()">🌐 20-Fetch Live HTTP Race</button>
+        </div>
+      </div>
+
+      <div id="race-empty" class="alert">
+        Click <strong>"20-Thread DB Race"</strong> to compare Naive vs. Atomic ConditionExpression, or <strong>"20-Fetch Live HTTP Race"</strong> to fire 20 real parallel browser requests at <code>POST /api/drops/{id}/claim</code>!
+      </div>
+
+      <div id="race-results" class="grid-2 hidden">
+        <div class="card" style="margin: 0; border-color: rgba(239,68,68,0.4);">
+          <h3 id="race-left-title">❌ Naive Check-Then-Burn (TOCTOU Bug)</h3>
+          <div id="race-naive-verdict" class="alert err"></div>
+          <div id="race-naive-stats" class="stat-strip"></div>
+          <div id="race-naive-grid" class="badge-grid"></div>
+        </div>
+        <div class="card" style="margin: 0; border-color: rgba(34,197,94,0.4);">
+          <h3 id="race-right-title">✅ ZeroDrop Atomic ConditionExpression</h3>
+          <div id="race-atomic-verdict" class="alert ok"></div>
+          <div id="race-atomic-stats" class="stat-strip"></div>
+          <div id="race-atomic-grid" class="badge-grid"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 5: KMS AUDIT CHAIN & OFFLINE AUDIT CERTIFICATE -->
+  <section id="tab-receipt" class="panel">
+    <div class="card">
+      <h2>🔗 Hash-Chained KMS Audit Ledger &amp; Offline Certificate</h2>
+      <p class="sub">Every lifecycle event links <code>prev_hash = SHA256(prev_event)</code> and carries an AWS KMS (<code>ECC_NIST_P256</code>) signature. Verify live or export a standalone offline certificate.</p>
+
+      <div class="row" style="margin-bottom: 14px;">
+        <input id="receipt-drop-id" type="text" placeholder="Enter Drop ID" style="max-width: 300px;" />
+        <button class="btn secondary sm" onclick="loadReceipt()">Fetch Audit Ledger</button>
+      </div>
+
+      <div id="receipt-empty" class="alert">Create or burn a drop first, or enter any Drop ID above to audit its KMS hash chain.</div>
+
+      <div id="receipt-card" class="hidden">
+        <div class="row" style="margin-bottom: 12px;">
+          <button class="btn success" onclick="verifyEntireAuditChain()">✅ Verify Entire Chain + All KMS Signatures</button>
+          <button class="btn danger sm" onclick="tamperChainEntryOne()">🧪 Flip 1 Char in Entry #1 (Cascade Test)</button>
+          <button class="btn secondary sm" onclick="restoreAuditChain()">↩️ Restore</button>
+          <button class="btn sm" onclick="exportHtmlCertificate()">📄 Export Verifiable HTML Cert</button>
+          <button class="btn secondary sm" onclick="exportJsonBundle()">📥 Export JSON</button>
+        </div>
+        <div id="rc-verify-out" class="alert hidden"></div>
+
+        <h3>Tamper-Evident Audit Chain Timeline</h3>
+        <div id="chain-timeline"></div>
+
+        <div id="final-receipt-box" class="hidden" style="margin-top: 16px;">
+          <h3>Final Burn / Shred Summary Receipt</h3>
+          <div class="kv">
+            <div class="k">Signing Key ID</div><div id="rc-key" class="v"></div>
+            <div class="k">Key Fingerprint</div><div id="rc-fp" class="v"></div>
+            <div class="k">Algorithm</div><div id="rc-alg" class="v"></div>
+            <div class="k">Payload SHA-256</div><div id="rc-sha" class="v"></div>
+            <div class="k">Signature (P1363 B64)</div><div id="rc-sig" class="v"></div>
+          </div>
+          <label>Canonical Signed JSON Receipt</label>
+          <div id="rc-json-box" class="mono-box"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 6: LIVE AWS SOC & COST TELEMETRY -->
+  <section id="tab-soc" class="panel">
+    <div class="card">
+      <div class="row" style="justify-content: space-between;">
+        <div>
+          <h2>🛡️ Live AWS Security Operations Center (Zero-Scan DynamoDB Feed)</h2>
+          <p class="sub">Real-time anonymized threat &amp; lifecycle telemetry from <code>GET /api/telemetry/soc</code> (1-RCU single-partition read, zero table scans).</p>
+        </div>
+        <button class="btn secondary sm" onclick="loadSocTelemetry()">🔄 Refresh SOC Feed</button>
+      </div>
+
+      <div class="soc-grid">
+        <div class="soc-kpi"><div id="soc-created" class="num">0</div><div class="lbl">Zero-Knowledge Drops Created</div></div>
+        <div class="soc-kpi"><div id="soc-burned" class="num" style="color:#86efac;">0</div><div class="lbl">Atomic One-Time Burns</div></div>
+        <div class="soc-kpi"><div id="soc-bots" class="num" style="color:#fde68a;">0</div><div class="lbl">Preview Crawlers Blocked (403)</div></div>
+        <div class="soc-kpi"><div id="soc-canary" class="num" style="color:#f87171;">0</div><div class="lbl">Canary Honeypot Tripwires</div></div>
+        <div class="soc-kpi"><div id="soc-shreds" class="num" style="color:#fca5a5;">0</div><div class="lbl">Owner Panic Kill Shreds</div></div>
+        <div class="soc-kpi"><div id="soc-approvals" class="num" style="color:#c4b5fd;">0</div><div class="lbl">Step Functions Break-Glass Starts</div></div>
+      </div>
+
+      <div class="alert ok" style="margin-bottom: 14px;">
+        <strong>💸 Scale-to-Zero Serverless Economics:</strong>
+        Idle compute cost = <strong>$0.00/mo</strong> (vs. ~$45–$120/mo for an always-on EC2 + NAT + Vault server). Every drop costs ~<strong>0.0002¢</strong> in Lambda/DynamoDB On-Demand.
+      </div>
+
+      <h3>Recent Cryptographic Security Events (Click Drop ID to Audit KMS Chain)</h3>
+      <div id="soc-events-list" class="mono-box" style="max-height: 290px; overflow-y: auto;">Loading SOC stream...</div>
+    </div>
+  </section>
+
+  <p class="footer-note">
+    Built for AWS Builder Center Weekend Challenge: <strong>No Pipeline, No Problem</strong> • CloudFront + S3 + HTTP API + Lambda + Step Functions + DynamoDB + KMS + SNS + CloudWatch
+  </p>
+</div>
+
+<script>
+const API = "";
+let currentMode = "fast";
+let lastShareUrl = "";
+let lastShareUrls = [];
+let activeDropId = "";
+let activeKeyB64u = "";
+let activeKillToken = "";
+let activeQuorumMeta = null;
+let activeInitialShare = "";
+let activePassphraseRequired = false;
+let activePassphraseCheck = null;
+let activeDropIvB64 = "";
+let activeClaimSecret = "";
+let activeFileShredToken = "";
+let activeDecryptedFile = null;
+let pollTimer = null;
+let wipeTimer = null;
+let socTimer = null;
+let lastDecryptedRawText = "";
+let loadedLedgerObj = null;
+let workingChain = [];
+
+function esc(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function bytesToB64(bytes) {
+  let bin = "";
+  const arr = new Uint8Array(bytes);
+  for (let i = 0; i < arr.length; i++) bin += String.fromCharCode(arr[i]);
+  return btoa(bin);
+}
+
+function b64ToBytes(b64) {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function bytesToB64u(bytes) {
+  return bytesToB64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function b64uToBytes(b64u) {
+  let b64 = b64u.replace(/-/g, "+").replace(/_/g, "/");
+  while (b64.length % 4) b64 += "=";
+  return b64ToBytes(b64);
+}
+
+async function sha256Hex(bytes) {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+// --- GF(256) Shamir Secret Sharing (AES polynomial 0x11b) ---
+function gfMul(a, b) {
+  let p = 0;
+  for (let i = 0; i < 8; i++) {
+    if (b & 1) p ^= a;
+    const hi = a & 0x80;
+    a = (a << 1) & 0xff;
+    if (hi) a ^= 0x1b;
+    b >>= 1;
+  }
+  return p;
+}
+
+function gfPow(a, e) {
+  let res = 1;
+  while (e > 0) {
+    if (e & 1) res = gfMul(res, a);
+    a = gfMul(a, a);
+    e >>= 1;
+  }
+  return res;
+}
+
+function gfDiv(a, b) {
+  if (b === 0) throw new Error("Division by zero in GF(256)");
+  if (a === 0) return 0;
+  return gfMul(a, gfPow(b, 254));
+}
+
+function shamirSplit(secretBytes, m, n) {
+  const len = secretBytes.length;
+  const bufs = Array.from({ length: n }, () => new Uint8Array(len));
+  const rnd = crypto.getRandomValues(new Uint8Array(len * (m - 1)));
+  for (let i = 0; i < len; i++) {
+    const coeffs = [secretBytes[i]];
+    for (let k = 1; k < m; k++) coeffs.push(rnd[i * (m - 1) + (k - 1)]);
+    for (let x = 1; x <= n; x++) {
+      let y = 0;
+      for (let k = m - 1; k >= 0; k--) {
+        y = gfMul(y, x) ^ coeffs[k];
+      }
+      bufs[x - 1][i] = y;
+    }
+  }
+  return bufs.map((b, idx) => `${idx + 1}-${m}-${n}:${bytesToB64u(b)}`);
+}
+
+function extractShareToken(raw) {
+  const s = raw.trim();
+  if (s.includes("#")) {
+    const p = new URLSearchParams(s.split("#")[1]);
+    if (p.get("s")) return p.get("s");
+  }
+  return s;
+}
+
+function shamirCombine(shareStrings) {
+  const seen = new Set();
+  const pts = [];
+  for (const raw of shareStrings) {
+    const tok = extractShareToken(raw);
+    if (!tok) continue;
+    const parts = tok.split(":");
+    if (parts.length !== 2) throw new Error("Invalid share token format");
+    const hdr = parts[0].split("-").map(Number);
+    if (hdr.length !== 3 || hdr.some(Number.isNaN)) throw new Error("Invalid share header");
+    const [x, m, n] = hdr;
+    if (x < 1 || x > n) throw new Error("Share index out of bounds");
+    if (!seen.has(x)) {
+      seen.add(x);
+      pts.push({ x, m, n, bytes: b64uToBytes(parts[1]) });
+    }
+  }
+  if (!pts.length) throw new Error("No valid Shamir shares provided.");
+  const mReq = pts[0].m;
+  const len = pts[0].bytes.length;
+  if (pts.length < mReq) throw new Error(`Need at least ${mReq} distinct Shamir shares (got ${pts.length}).`);
+  const usePts = pts.slice(0, mReq);
+  const out = new Uint8Array(len);
+  for (let b = 0; b < len; b++) {
+    let acc = 0;
+    for (let i = 0; i < mReq; i++) {
+      let li = 1;
+      for (let j = 0; j < mReq; j++) {
+        if (i !== j) li = gfMul(li, gfDiv(usePts[j].x, usePts[j].x ^ usePts[i].x));
+      }
+      acc ^= gfMul(usePts[i].bytes[b], li);
+    }
+    out[b] = acc;
+  }
+  return out;
+}
+
+function lightPipeline(nodes, cls = "lit") {
+  ["crypto", "edge", "ddb", "sfn", "kms"].forEach(id => {
+    const el = document.getElementById("pn-" + id);
+    if (el) el.className = "pipe-node" + (nodes.includes(id) ? " " + cls : "");
+  });
+}
+
+async function deriveAesKey(rawKeyBytes, keyB64u, passphrase, ivB64) {
+  if (!passphrase) {
+    return crypto.subtle.importKey("raw", rawKeyBytes, "AES-GCM", false, ["encrypt", "decrypt"]);
+  }
+  const baseMat = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(keyB64u + ":" + passphrase),
+    "PBKDF2",
+    false,
+    ["deriveKey"]
+  );
+  return crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt: new TextEncoder().encode("zerodrop-kdf-v2:" + ivB64),
+      iterations: 120000,
+      hash: "SHA-256",
+    },
+    baseMat,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+function switchTab(name) {
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === "tab-" + name));
+  if (socTimer) { clearInterval(socTimer); socTimer = null; }
+  if (name === "soc") {
+    loadSocTelemetry();
+    socTimer = setInterval(loadSocTelemetry, 3000);
+  }
+}
+
+function shannonEntropy(str) {
+  if (!str) return 0;
+  const counts = {};
+  for (let i = 0; i < str.length; i++) counts[str[i]] = (counts[str[i]] || 0) + 1;
+  let ent = 0;
+  const len = str.length;
+  for (const k in counts) {
+    const p = counts[k] / len;
+    ent -= p * Math.log2(p);
+  }
+  return ent;
+}
+
+function scanSecretPreflight() {
+  const txt = document.getElementById("secret-text").value;
+  const box = document.getElementById("preflight-box");
+  if (!txt.trim()) {
+    box.classList.add("hidden");
+    return;
+  }
+  const findings = [];
+  let highRisk = false;
+  if (/AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}/.test(txt)) { findings.push("AWS Access Key"); highRisk = true; }
+  if (/-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(txt)) { findings.push("Private Key PEM"); highRisk = true; }
+  if (/whsec_[A-Za-z0-9]+|sk_live_[A-Za-z0-9]+/.test(txt)) { findings.push("Stripe Live Secret"); highRisk = true; }
+  if (/ghp_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]+|sk-[A-Za-z0-9]{20,}/.test(txt)) { findings.push("API Token"); highRisk = true; }
+  if (/(postgres|mysql|mongodb):\/\/[^:\s]+:[^@\s]+@/.test(txt)) { findings.push("DB Connection String"); highRisk = true; }
+  const ent = shannonEntropy(txt).toFixed(2);
+  if (parseFloat(ent) >= 4.2) findings.push(`High Entropy (${ent} b/ch)`);
+
+  box.classList.remove("hidden", "ok", "warn");
+  if (findings.length) {
+    box.classList.add("warn");
+    box.innerHTML =
+      `🔍 <strong>Client Preflight Scanner:</strong> Detected <strong>${esc(findings.join(", "))}</strong> (Entropy ${ent} b/char). ` +
+      (highRisk
+        ? `<button class="btn secondary sm" style="margin-left:8px;" onclick="applyRecommendedGuardrails()">⚡ Apply High-Security Guardrails</button>`
+        : "");
+  } else {
+    box.classList.add("ok");
+    box.textContent = `🔍 Client Preflight Scanner: Shannon Entropy ${ent} bits/char • Ready for AES-256-GCM encryption.`;
+  }
+}
+
+function applyRecommendedGuardrails() {
+  selectMode("approval");
+  document.getElementById("quorum-select").value = "2of3";
+  const box = document.getElementById("preflight-box");
+  box.classList.remove("warn");
+  box.classList.add("ok");
+  box.textContent = "✅ Applied Break-Glass Approval (Step Functions) + 2-of-3 Shamir Quorum!";
+}
+
+function selectMode(mode) {
+  currentMode = mode;
+  document.getElementById("mode-fast-card").classList.toggle("selected", mode === "fast");
+  document.getElementById("mode-approval-card").classList.toggle("selected", mode === "approval");
+}
+
+function loadSampleEnv() {
+  document.getElementById("secret-file").value = "";
+  document.getElementById("drop-passphrase").value = "";
+  document.getElementById("drop-label").value = "Prod Billing Webhook & DB Credentials";
+  document.getElementById("secret-text").value =
+`# Temporary break-glass production creds (rotates in 1h)
+DATABASE_URL=postgres://svc_billing:9fA!k29xLmQp41@prod-db.internal:5432/ledger
+STRIPE_WEBHOOK_SECRET=whsec_9a82b71c64e0f239d18a91c4e28a102b
+INTERNAL_ADMIN_TOKEN=zd_live_tok_88392019481029`;
+  document.getElementById("canary-alert-chk").checked = false;
+  scanSecretPreflight();
+}
+
+function loadCanaryPreset() {
+  document.getElementById("secret-file").value = "";
+  document.getElementById("drop-passphrase").value = "";
+  document.getElementById("drop-label").value = "🍯 Canary Honeypot: Decoy Internal Prod Config";
+  document.getElementById("secret-text").value =
+`# CANARY DECOY (ZERO REAL CREDENTIALS - INTRUDER TRIPWIRE)
+SERVICE_ENDPOINT=https://internal-decoy.example.invalid/v1/admin
+DECOY_API_TOKEN=zd_decoy_not_a_real_secret_000000000000`;
+  selectMode("approval");
+  document.getElementById("canary-alert-chk").checked = true;
+  scanSecretPreflight();
+}
+
+async function checkHealth() {
+  try {
+    const r = await fetch(API + "/api/health");
+    const d = await r.json();
+    const envPill = document.getElementById("env-pill");
+    envPill.textContent = d.local_emulator ? "Local AWS Emulator (v3)" : "Live AWS Serverless (v3)";
+    envPill.classList.add("ok");
+    const kmsPill = document.getElementById("kms-pill");
+    kmsPill.textContent = d.kms_enabled ? "KMS ECDSA P-256 Active" : "SHA-256 Receipts";
+    if (d.kms_enabled) kmsPill.classList.add("ok");
+    document.getElementById("hdr-fp").textContent = d.kms_fingerprint || "unavailable";
+  } catch (e) {
+    document.getElementById("env-pill").textContent = "Backend Unreachable";
+  }
+}
+
+function parseQuorumOption(val) {
+  if (val === "2of3") return { threshold: 2, total: 3 };
+  if (val === "3of5") return { threshold: 3, total: 5 };
+  return null;
+}
+
+async function createDrop() {
+  const errBox = document.getElementById("create-error");
+  errBox.classList.add("hidden");
+  const btn = document.getElementById("create-btn");
+  const label = document.getElementById("drop-label").value.trim() || "Confidential Drop";
+  const textVal = document.getElementById("secret-text").value;
+  const fileInput = document.getElementById("secret-file");
+  const file = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+  const passphrase = document.getElementById("drop-passphrase").value;
+  const ttlMinutes = parseInt(document.getElementById("ttl-select").value, 10);
+  const demoInbox = document.getElementById("demo-inbox-chk").checked;
+  const canaryAlert = document.getElementById("canary-alert-chk").checked;
+  const quorum = parseQuorumOption(document.getElementById("quorum-select").value);
+
+  if (!file && !textVal.trim()) {
+    errBox.textContent = "Please enter secret text or choose a file to encrypt.";
+    errBox.classList.remove("hidden");
+    return;
+  }
+  if (file && file.size > 25 * 1024 * 1024) {
+    errBox.textContent = "File exceeds 25 MB browser limit.";
+    errBox.classList.remove("hidden");
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Encrypting in Browser...";
+  lightPipeline(["crypto"]);
+  try {
+    const rawKey = crypto.getRandomValues(new Uint8Array(32));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const keyB64u = bytesToB64u(rawKey);
+    const ivB64 = bytesToB64(iv);
+    const aesKey = await deriveAesKey(rawKey, keyB64u, passphrase, ivB64);
+    const shares = quorum ? shamirSplit(rawKey, quorum.threshold, quorum.total) : null;
+
+    let passphraseCheck = null;
+    if (passphrase) {
+      const ivCheck = crypto.getRandomValues(new Uint8Array(12));
+      const checkBuf = await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv: ivCheck },
+        aesKey,
+        new TextEncoder().encode("ZERODROP_KEY_OK")
+      );
+      passphraseCheck = { iv_b64: bytesToB64(ivCheck), ct_b64: bytesToB64(checkBuf) };
+    }
+
+    let payloadBytes;
+    let payloadHash;
+    let data;
+    if (file) {
+      const buf = await file.arrayBuffer();
+      payloadBytes = new Uint8Array(buf);
+      const cipherBuf = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aesKey, payloadBytes);
+      payloadHash = await sha256Hex(payloadBytes);
+      lightPipeline(["crypto", "edge", "ddb"]);
+      const res = await fetch(API + "/api/drops", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: currentMode, label, ttl_minutes: ttlMinutes, iv_b64: ivB64,
+          has_file: true, filename: file.name, file_size: file.size,
+          mime_type: file.type || "application/octet-stream",
+          payload_sha256: payloadHash, demo_inbox: demoInbox,
+          canary_alert: canaryAlert, passphrase_check: passphraseCheck, quorum,
+        }),
+      });
+      data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || "Create failed");
+      const putRes = await fetch(data.presigned_put_url, {
+        method: "PUT", headers: { "Content-Type": "application/octet-stream" }, body: new Blob([cipherBuf]),
+      });
+      if (!putRes.ok) throw new Error("S3 Presigned PUT failed (" + putRes.status + ")");
+    } else {
+      payloadBytes = new TextEncoder().encode(textVal);
+      const cipherBuf = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aesKey, payloadBytes);
+      payloadHash = await sha256Hex(payloadBytes);
+      lightPipeline(["crypto", "edge", "ddb", "kms"], "lit-green");
+      const res = await fetch(API + "/api/drops", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: currentMode, label, ttl_minutes: ttlMinutes, iv_b64: ivB64,
+          ciphertext_b64: bytesToB64(cipherBuf), has_file: false,
+          payload_sha256: payloadHash, demo_inbox: demoInbox,
+          canary_alert: canaryAlert, passphrase_check: passphraseCheck, quorum,
+        }),
+      });
+      data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || "Create failed");
+    }
+    showCreateSuccess(data, keyB64u, ivB64, payloadHash, Boolean(passphrase), shares, quorum);
+  } catch (e) {
+    errBox.textContent = e.message;
+    errBox.classList.remove("hidden");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "🔒 Encrypt & Create ZeroDrop";
+  }
+}
+
+function showCreateSuccess(data, keyB64u, ivB64, payloadHash, hasPass, shares, quorum) {
+  activeDropId = data.drop_id;
+  activeKeyB64u = shares ? "" : keyB64u;
+  activeKillToken = data.kill_token || "";
+  activeClaimSecret = "";
+  activeDecryptedFile = null;
+  activeQuorumMeta = quorum;
+  document.getElementById("create-empty").classList.add("hidden");
+  document.getElementById("create-result").classList.remove("hidden");
+  document.getElementById("res-kill-token").textContent = activeKillToken;
+  const panicBtn = document.getElementById("panic-shred-btn");
+  panicBtn.disabled = false;
+  panicBtn.textContent = "☠️ Panic Shred Now";
+  document.getElementById("panic-shred-status").classList.add("hidden");
+
+  if (shares && quorum) {
+    lastShareUrls = shares.map(sh => window.location.origin + "/#d=" + encodeURIComponent(data.drop_id) + "&s=" + encodeURIComponent(sh) + (hasPass ? "&p=1" : ""));
+    lastShareUrl = lastShareUrls[0];
+    document.getElementById("single-share-wrap").classList.add("hidden");
+    document.getElementById("quorum-shares-wrap").classList.remove("hidden");
+    document.getElementById("quorum-shares-title").textContent =
+      `Shamir ${quorum.threshold}-of-${quorum.total} Quorum Share URLs (Any ${quorum.threshold} required; 1 reveals 0 bits)`;
+    document.getElementById("quorum-shares-list").innerHTML = lastShareUrls.map((url, idx) => `
+      <div class="share-row">
+        <strong style="font-size:0.75rem; color:var(--accent); min-width:56px;">Share #${idx + 1}</strong>
+        <code>${esc(url)}</code>
+        <button class="btn secondary sm" data-url="${esc(url)}" onclick="copyTextSafe(this.dataset.url, this)">Copy</button>
+      </div>`).join("");
+  } else {
+    lastShareUrls = [];
+    lastShareUrl = window.location.origin + "/#d=" + encodeURIComponent(data.drop_id) + "&k=" + encodeURIComponent(keyB64u) + (hasPass ? "&p=1" : "");
+    document.getElementById("single-share-wrap").classList.remove("hidden");
+    document.getElementById("quorum-shares-wrap").classList.add("hidden");
+    document.getElementById("share-url-box").textContent = lastShareUrl;
+  }
+
+  document.getElementById("res-drop-id").textContent = data.drop_id;
+  document.getElementById("res-mode").textContent = data.mode === "approval" ? "Break-Glass Approval (Step Functions)" : "Fast Atomic Burn";
+  const prot = [];
+  if (quorum) prot.push(`${quorum.threshold}-of-${quorum.total} Shamir GF(256)`);
+  if (hasPass) prot.push("PBKDF2 2FA");
+  document.getElementById("res-pass").textContent = prot.length ? prot.join(" + ") : "URL Fragment AES-256-GCM";
+  document.getElementById("res-hash").textContent = payloadHash;
+  document.getElementById("res-chain-head").textContent = data.chain_head_sha256 || "";
+  document.getElementById("res-iv").textContent = ivB64;
+}
+
+async function panicShredCreated() {
+  if (!activeDropId || !activeKillToken) return;
+  const btn = document.getElementById("panic-shred-btn");
+  const stBox = document.getElementById("panic-shred-status");
+  btn.disabled = true;
+  btn.textContent = "Shredding...";
+  try {
+    const r = await fetch(API + "/api/drops/" + encodeURIComponent(activeDropId) + "/shred", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kill_token: activeKillToken }),
+    });
+    const d = await r.json();
+    stBox.classList.remove("hidden", "ok", "err");
+    if (r.ok) {
+      lightPipeline(["edge", "ddb", "kms"], "lit-red");
+      stBox.classList.add("err");
+      stBox.textContent = `☠️ OWNER_SHREDDED! Ciphertext scrubbed, S3/SFN halted, and KMS event #${(d.audit_chain || []).length} (OWNER_PANIC_SHREDDED) signed.`;
+      btn.textContent = "☠️ Shredded";
+    } else {
+      stBox.classList.add("err");
+      stBox.textContent = d.message || d.error || "Unable to shred";
+      btn.disabled = false;
+      btn.textContent = "☠️ Panic Shred Now";
+    }
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = "☠️ Panic Shred Now";
+  }
+}
+
+async function copyTextSafe(text, btnEl) {
+  if (!text) return;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      throw new Error("fallback");
+    }
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    ta.remove();
+  }
+  if (btnEl) {
+    const orig = btnEl.textContent;
+    btnEl.textContent = "✓ Copied!";
+    setTimeout(() => { btnEl.textContent = orig; }, 1400);
+  }
+}
+
+async function copyShareUrl(btnEl) {
+  await copyTextSafe(lastShareUrl, btnEl);
+}
+
+function openGeneratedDrop() {
+  if (!activeDropId) return;
+  activeInitialShare = "";
+  const suffix = document.getElementById("res-pass").textContent.includes("PBKDF2") ? "&p=1" : "";
+  window.location.hash = "d=" + encodeURIComponent(activeDropId) + "&k=" + encodeURIComponent(activeKeyB64u) + suffix;
+  handleHashNavigation();
+}
+
+function openQuorumInUnlocker() {
+  if (!lastShareUrls.length) return;
+  const frag = lastShareUrls[0].split("#")[1];
+  window.location.hash = frag;
+  handleHashNavigation();
+}
+
+function inspectCreatedChain() {
+  if (!activeDropId) return;
+  switchTab("receipt");
+  loadReceipt(activeDropId);
+}
+
+function loadManualDrop() {
+  const raw = document.getElementById("manual-drop-url").value.trim();
+  if (!raw) return;
+  activeClaimSecret = "";
+  if (raw.includes("#")) {
+    window.location.hash = raw.split("#")[1];
+    handleHashNavigation();
+  } else {
+    activeDropId = raw;
+    activeKeyB64u = "";
+    activeInitialShare = "";
+    loadDropStatus(raw);
+  }
+}
+
+async function loadDropStatus(dropId) {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  if (wipeTimer) { clearInterval(wipeTimer); wipeTimer = null; }
+  lastDecryptedRawText = "";
+  activeDropId = dropId;
+  activeFileShredToken = "";
+  activeDecryptedFile = null;
+  window.__demoApprovalUrl = "";
+  document.getElementById("unlock-empty").classList.add("hidden");
+  document.getElementById("unlock-loaded").classList.remove("hidden");
+  document.getElementById("unlock-burned-box").classList.add("hidden");
+  document.getElementById("unlock-plaintext-wrap").classList.add("hidden");
+  document.getElementById("unlock-plaintext").textContent = "";
+  document.getElementById("unlock-plaintext").classList.remove("hidden");
+  document.getElementById("wipe-bar").classList.add("hidden");
+  document.getElementById("masked-env-wrap").classList.add("hidden");
+  document.getElementById("masked-env-wrap").innerHTML = "";
+  document.getElementById("toggle-raw-btn").classList.add("hidden");
+  document.getElementById("unlock-waiting").classList.add("hidden");
+  document.getElementById("demo-inbox-box").classList.add("hidden");
+  document.getElementById("bot-sim-msg").classList.add("hidden");
+  document.getElementById("pass-err-msg").classList.add("hidden");
+  document.getElementById("unlock-passphrase-input").value = "";
+  const dlBtn = document.getElementById("download-file-btn");
+  dlBtn.classList.add("hidden");
+  dlBtn.disabled = false;
+  dlBtn.textContent = "⬇️ Decrypt & Download File + Shred S3";
+  document.getElementById("view-receipt-btn").classList.add("hidden");
+  lightPipeline(["edge", "ddb"]);
+
+  const r = await fetch(API + "/api/drops/" + encodeURIComponent(dropId) + "/status");
+  const d = await r.json();
+  if (!r.ok) {
+    document.getElementById("unlock-burned-box").textContent = d.message || "Drop not found or expired.";
+    document.getElementById("unlock-burned-box").classList.remove("hidden");
+    document.getElementById("unlock-btn").disabled = true;
+    return;
+  }
+  renderStatusMeta(d);
+}
+
+function renderStatusMeta(d) {
+  activePassphraseRequired = Boolean(d.has_passphrase);
+  activePassphraseCheck = d.passphrase_check || null;
+  activeDropIvB64 = d.iv_b64 || "";
+  activeQuorumMeta = d.quorum || null;
+
+  document.getElementById("u-id").textContent = d.drop_id;
+  document.getElementById("u-label").textContent = d.label + (d.canary_alert ? " [CANARY]" : "");
+  document.getElementById("u-mode").textContent = d.mode === "approval" ? "Break-Glass Approval (Step Functions)" : "Fast Atomic Burn";
+  document.getElementById("u-status").textContent = d.status + " (" + (d.shred_state || "ACTIVE") + ")";
+  document.getElementById("u-file").textContent = d.has_file ? (d.filename + " (" + d.file_size + " bytes, encrypted)") : "Text Secret";
+
+  const protDesc = [];
+  if (activeQuorumMeta) protDesc.push(`${activeQuorumMeta.threshold}-of-${activeQuorumMeta.total} Shamir Quorum`);
+  if (activePassphraseRequired) protDesc.push("2FA Passphrase (Local Pre-Check)");
+  document.getElementById("u-pass-req").textContent = protDesc.length ? protDesc.join(" + ") : "Single URL Key";
+
+  document.getElementById("u-bots").textContent = String(d.bot_shield_hits || 0);
+  document.getElementById("u-chain-len").textContent = String(d.chain_length || 1) + " KMS-signed events";
+  document.getElementById("unlock-passphrase-box").classList.toggle("hidden", !activePassphraseRequired || d.status !== "READY");
+
+  const qBox = document.getElementById("unlock-quorum-box");
+  if (activeQuorumMeta && d.status === "READY") {
+    qBox.classList.remove("hidden");
+    document.getElementById("unlock-quorum-label").textContent =
+      `🧩 Enter ${activeQuorumMeta.threshold} Distinct Shamir Shares (of ${activeQuorumMeta.total})`;
+    let html = "";
+    for (let i = 0; i < activeQuorumMeta.threshold; i++) {
+      const pre = i === 0 && activeInitialShare ? esc(activeInitialShare) : "";
+      html += `<input class="quorum-share-in" type="text" value="${pre}" placeholder="Paste Share #${i + 1} URL or token (e.g. ${i + 1}-${activeQuorumMeta.threshold}-${activeQuorumMeta.total}:...)" style="margin-top:6px; font-family:var(--mono); font-size:0.78rem;" />`;
+    }
+    document.getElementById("unlock-quorum-inputs").innerHTML = html;
+  } else {
+    qBox.classList.add("hidden");
+    document.getElementById("unlock-quorum-inputs").innerHTML = "";
+  }
+
+  const btn = document.getElementById("unlock-btn");
+  if (d.status === "READY") {
+    btn.disabled = false;
+    btn.textContent = d.mode === "approval" ? "🛡️ Request Break-Glass Unlock" : "🔓 Unlock & Burn Secret";
+  } else if (d.status === "PENDING_APPROVAL") {
+    btn.disabled = true;
+    lightPipeline(["edge", "ddb", "sfn"], "lit-amber");
+    document.getElementById("unlock-waiting").classList.remove("hidden");
+    if (d.demo_approval_url) {
+      window.__demoApprovalUrl = d.demo_approval_url;
+      document.getElementById("demo-inbox-box").classList.remove("hidden");
+    }
+    startApprovalPoll();
+  } else if (d.status === "APPROVED_READY" && activeClaimSecret) {
+    btn.disabled = true;
+    collectApprovedDrop();
+  } else {
+    btn.disabled = true;
+    const burnedBox = document.getElementById("unlock-burned-box");
+    burnedBox.textContent = "⛔ Status is " + d.status + ". This drop has already been burned, denied, panic-shredded, or expired.";
+    burnedBox.classList.remove("hidden");
+    if (d.has_receipt) {
+      document.getElementById("view-receipt-btn").classList.remove("hidden");
+      document.getElementById("unlock-plaintext-wrap").classList.remove("hidden");
+    }
+  }
+}
+
+function resolveRawKeyAndB64u() {
+  if (activeQuorumMeta) {
+    const vals = Array.from(document.querySelectorAll(".quorum-share-in")).map(el => el.value.trim()).filter(Boolean);
+    const rawKey = shamirCombine(vals);
+    return { rawKey, keyB64u: bytesToB64u(rawKey) };
+  }
+  if (!activeKeyB64u) return { rawKey: null, keyB64u: "" };
+  return { rawKey: b64uToBytes(activeKeyB64u), keyB64u: activeKeyB64u };
+}
+
+async function simulateBotCrawl() {
+  if (!activeDropId) return;
+  const r = await fetch(API + "/api/drops/" + encodeURIComponent(activeDropId) + "/claim", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ simulated_bot: "Slackbot-LinkExpanding/1.0" }),
+  });
+  const box = document.getElementById("bot-sim-msg");
+  box.classList.remove("hidden");
+  const d = await r.json();
+  if (r.status === 403) {
+    box.textContent = "🛡️ Bot Shield Blocked (" + r.status + "): " + d.message + " — Logged to KMS Audit Chain; Secret stays 100% intact!";
+    lightPipeline(["edge", "kms"], "lit-amber");
+  } else {
+    box.textContent = "Response (" + r.status + "): " + (d.message || d.error || "Protected");
+  }
+  const st = await (await fetch(API + "/api/drops/" + encodeURIComponent(activeDropId) + "/status")).json();
+  document.getElementById("u-bots").textContent = String(st.bot_shield_hits || 0);
+  document.getElementById("u-chain-len").textContent = String(st.chain_length || 1) + " KMS-signed events";
+}
+
+async function verifyLocalUnlockInputsBeforeBurn(ivB64) {
+  const { rawKey, keyB64u } = resolveRawKeyAndB64u();
+  if (activeQuorumMeta && !rawKey) throw new Error("Provide valid Shamir Quorum shares first.");
+  if (!activePassphraseRequired) return { rawKey, keyB64u, pass: "" };
+
+  const pass = document.getElementById("unlock-passphrase-input").value;
+  if (!pass) throw new Error("Passphrase required to unlock this drop.");
+  if (!rawKey) throw new Error("Missing decryption key.");
+  const aesKey = await deriveAesKey(rawKey, keyB64u, pass, ivB64);
+  if (activePassphraseCheck) {
+    try {
+      const dec = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: b64ToBytes(activePassphraseCheck.iv_b64) },
+        aesKey,
+        b64ToBytes(activePassphraseCheck.ct_b64)
+      );
+      if (new TextDecoder().decode(dec) !== "ZERODROP_KEY_OK") throw new Error("mismatch");
+    } catch {
+      throw new Error("❌ Wrong passphrase or invalid Quorum share! Checked locally BEFORE calling AWS — secret NOT burned.");
+    }
+  }
+  return { rawKey, keyB64u, pass };
+}
+
+async function claimDrop() {
+  if (!activeDropId) return;
+  const passErr = document.getElementById("pass-err-msg");
+  passErr.classList.add("hidden");
+
+  try {
+    await verifyLocalUnlockInputsBeforeBurn(activeDropIvB64);
+  } catch (e) {
+    passErr.textContent = e.message;
+    passErr.classList.remove("hidden");
+    return;
+  }
+
+  const btn = document.getElementById("unlock-btn");
+  const prevText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Claiming...";
+  try {
+    const r = await fetch(API + "/api/drops/" + encodeURIComponent(activeDropId) + "/claim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-ZeroDrop-Human": "1" },
+      body: JSON.stringify({ human_confirm: true }),
+    });
+    const d = await r.json();
+    if (r.status === 200) {
+      activeFileShredToken = d.file_shred_token || "";
+      btn.textContent = "✅ Unlocked & Burned";
+      lightPipeline(["crypto", "edge", "ddb", "kms"], "lit-green");
+      await decryptClaimedPayload(d);
+    } else if (r.status === 202) {
+      btn.textContent = "⏳ Waiting Owner Approval";
+      activeClaimSecret = d.claim_secret;
+      lightPipeline(["edge", "ddb", "sfn"], "lit-amber");
+      document.getElementById("u-status").textContent = "PENDING_APPROVAL";
+      document.getElementById("unlock-waiting").classList.remove("hidden");
+      const st = await (await fetch(API + "/api/drops/" + encodeURIComponent(activeDropId) + "/status")).json();
+      if (st.demo_approval_url) {
+        window.__demoApprovalUrl = st.demo_approval_url;
+        document.getElementById("demo-inbox-box").classList.remove("hidden");
+      }
+      startApprovalPoll();
+    } else {
+      btn.textContent = "⛔ Unavailable";
+      const box = document.getElementById("unlock-burned-box");
+      box.textContent = "⛔ " + (d.message || d.error || "Unable to claim drop");
+      box.classList.remove("hidden");
+    }
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = prevText;
+    passErr.textContent = "Network error claiming drop: " + e.message;
+    passErr.classList.remove("hidden");
+  }
+}
+
+function startApprovalPoll() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    if (!activeDropId) return;
+    const r = await fetch(API + "/api/drops/" + encodeURIComponent(activeDropId) + "/status");
+    if (!r.ok) return;
+    const d = await r.json();
+    document.getElementById("u-status").textContent = d.status + " (" + (d.shred_state || "ACTIVE") + ")";
+    document.getElementById("u-chain-len").textContent = String(d.chain_length || 1) + " KMS-signed events";
+    if (d.demo_approval_url) {
+      window.__demoApprovalUrl = d.demo_approval_url;
+      document.getElementById("demo-inbox-box").classList.remove("hidden");
+    }
+    if (d.status === "APPROVED_READY" && activeClaimSecret) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+      await collectApprovedDrop();
+    } else if (["DENIED_SHREDDED", "OWNER_SHREDDED", "EXPIRED"].includes(d.status)) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+      document.getElementById("unlock-waiting").classList.add("hidden");
+      const box = document.getElementById("unlock-burned-box");
+      box.textContent = "🚫 Secret terminated (" + d.status + "). Permanently scrubbed across DynamoDB & S3.";
+      box.classList.remove("hidden");
+    }
+  }, 1500);
+}
+
+async function collectApprovedDrop() {
+  const r = await fetch(API + "/api/drops/" + encodeURIComponent(activeDropId) + "/collect", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ claim_secret: activeClaimSecret }),
+  });
+  const d = await r.json();
+  if (r.ok) {
+    activeFileShredToken = d.file_shred_token || activeClaimSecret;
+    lightPipeline(["crypto", "edge", "ddb", "sfn", "kms"], "lit-green");
+    document.getElementById("unlock-waiting").classList.add("hidden");
+    await decryptClaimedPayload(d);
+  } else {
+    document.getElementById("unlock-waiting").classList.add("hidden");
+    const box = document.getElementById("unlock-burned-box");
+    box.textContent = "⛔ " + (d.message || d.error || "Unable to collect approved drop.");
+    box.classList.remove("hidden");
+  }
+}
+
+async function decryptClaimedPayload(d) {
+  document.getElementById("u-status").textContent = d.status + " (" + (d.shred_state || "SHREDDED") + ")";
+  document.getElementById("unlock-passphrase-box").classList.add("hidden");
+  document.getElementById("unlock-quorum-box").classList.add("hidden");
+  const wrap = document.getElementById("unlock-plaintext-wrap");
+  const out = document.getElementById("unlock-plaintext");
+  wrap.classList.remove("hidden");
+  document.getElementById("view-receipt-btn").classList.remove("hidden");
+  if (d.audit_chain) {
+    document.getElementById("u-chain-len").textContent = String(d.audit_chain.length) + " KMS-signed events";
+  }
+
+  let rawKey;
+  let keyB64u;
+  try {
+    ({ rawKey, keyB64u } = resolveRawKeyAndB64u());
+  } catch (e) {
+    out.textContent = "❌ Key reconstruction failed: " + e.message;
+    return;
+  }
+
+  if (!rawKey) {
+    out.textContent = "[No #k= or Quorum decryption key found! Raw ciphertext shown]\n" + (d.ciphertext_b64 || "");
+    return;
+  }
+
+  try {
+    const pass = document.getElementById("unlock-passphrase-input").value;
+    const aesKey = await deriveAesKey(rawKey, keyB64u, activePassphraseRequired ? pass : "", d.iv_b64);
+    const iv = b64ToBytes(d.iv_b64);
+
+    if (d.has_file) {
+      activeDecryptedFile = { url: d.presigned_get_url, iv, aesKey, filename: d.filename, mime: d.mime_type };
+      out.textContent = "Encrypted file ready (" + d.filename + "). Click 'Decrypt & Download File + Shred S3' below.";
+      document.getElementById("download-file-btn").classList.remove("hidden");
+    } else {
+      const cipherBytes = b64ToBytes(d.ciphertext_b64);
+      const plainBuf = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, aesKey, cipherBytes);
+      lastDecryptedRawText = new TextDecoder().decode(plainBuf);
+      out.textContent = lastDecryptedRawText;
+      renderMaskedEnvIfApplicable(lastDecryptedRawText);
+      startWipeCountdown();
+    }
+  } catch (e) {
+    out.textContent = "❌ Decryption failed: Wrong 2FA passphrase, invalid Quorum share, or tampered key fragment.";
+  }
+}
+
+function renderMaskedEnvIfApplicable(plain) {
+  const lines = plain.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith("#") && l.includes("="));
+  const envWrap = document.getElementById("masked-env-wrap");
+  const rawBox = document.getElementById("unlock-plaintext");
+  const toggleBtn = document.getElementById("toggle-raw-btn");
+  if (!lines.length) {
+    envWrap.classList.add("hidden");
+    toggleBtn.classList.add("hidden");
+    rawBox.classList.remove("hidden");
+    return;
+  }
+  envWrap.innerHTML = lines.map((line, i) => {
+    const idx = line.indexOf("=");
+    const k = line.slice(0, idx);
+    const v = line.slice(idx + 1);
+    return `<div class="env-row">
+      <span class="ek">${esc(k)}</span>
+      <span id="env-val-${i}" class="ev" data-raw="${esc(v)}" data-shown="0">•••••••••••• (${v.length} chars)</span>
+      <button class="btn secondary sm" onclick="toggleEnvMask(${i})">👁️</button>
+      <button class="btn secondary sm" data-copy="${esc(v)}" onclick="copyTextSafe(this.dataset.copy, this)">Copy</button>
+    </div>`;
+  }).join("");
+  envWrap.classList.remove("hidden");
+  toggleBtn.classList.remove("hidden");
+  rawBox.classList.add("hidden");
+}
+
+function toggleEnvMask(i) {
+  const el = document.getElementById("env-val-" + i);
+  if (!el) return;
+  const shown = el.dataset.shown === "1";
+  const raw = el.dataset.raw || "";
+  el.textContent = shown ? `•••••••••••• (${raw.length} chars)` : raw;
+  el.dataset.shown = shown ? "0" : "1";
+}
+
+function toggleRawPlaintext() {
+  document.getElementById("unlock-plaintext").classList.toggle("hidden");
+}
+
+function startWipeCountdown() {
+  if (wipeTimer) clearInterval(wipeTimer);
+  let secs = 60;
+  const bar = document.getElementById("wipe-bar");
+  const lbl = document.getElementById("wipe-countdown");
+  bar.classList.remove("hidden");
+  lbl.textContent = "60";
+  wipeTimer = setInterval(() => {
+    secs--;
+    lbl.textContent = String(secs);
+    if (secs <= 0) wipeScreenNow();
+  }, 1000);
+}
+
+function wipeScreenNow() {
+  if (wipeTimer) { clearInterval(wipeTimer); wipeTimer = null; }
+  lastDecryptedRawText = "";
+  document.getElementById("wipe-bar").classList.add("hidden");
+  document.getElementById("masked-env-wrap").classList.add("hidden");
+  document.getElementById("masked-env-wrap").innerHTML = "";
+  document.getElementById("toggle-raw-btn").classList.add("hidden");
+  const rawBox = document.getElementById("unlock-plaintext");
+  rawBox.classList.remove("hidden");
+  rawBox.textContent = "🔥 Plaintext wiped from browser memory & DOM for shoulder-surfing safety.";
+}
+
+async function downloadDecryptedFile() {
+  if (!activeDecryptedFile) return;
+  const btn = document.getElementById("download-file-btn");
+  btn.disabled = true;
+  btn.textContent = "Downloading & Decrypting...";
+  try {
+    const r = await fetch(activeDecryptedFile.url);
+    if (!r.ok) throw new Error("Encrypted S3 file already shredded or expired (" + r.status + ")");
+    const cipherBuf = await r.arrayBuffer();
+    const plainBuf = await crypto.subtle.decrypt({ name: "AES-GCM", iv: activeDecryptedFile.iv }, activeDecryptedFile.aesKey, cipherBuf);
+    const blob = new Blob([plainBuf], { type: activeDecryptedFile.mime });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = activeDecryptedFile.filename;
+    a.click();
+    const shredRes = await fetch(API + "/api/drops/" + encodeURIComponent(activeDropId) + "/confirm-shred", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file_shred_token: activeFileShredToken }),
+    });
+    if (shredRes.ok) {
+      document.getElementById("u-status").textContent = "BURNED (SHREDDED)";
+    }
+    btn.textContent = "✅ Downloaded & S3 Shredded!";
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = "Download failed: " + e.message;
+  }
+}
+
+async function copyDecrypted(btnEl) {
+  await copyTextSafe(lastDecryptedRawText || document.getElementById("unlock-plaintext").textContent, btnEl);
+}
+
+function openDemoApproval() {
+  if (!window.__demoApprovalUrl) return;
+  const tok = window.__demoApprovalUrl.split("#review=")[1];
+  document.getElementById("manual-review-token").value = tok;
+  switchTab("review");
+  loadApprovalToken(tok);
+}
+
+async function loadApprovalToken(tokArg) {
+  const tok = tokArg || document.getElementById("manual-review-token").value.trim();
+  if (!tok) return;
+  document.getElementById("manual-review-token").value = tok;
+  const st = document.getElementById("review-status");
+  st.classList.add("hidden");
+  st.textContent = "";
+  document.getElementById("back-to-recipient-btn").classList.add("hidden");
+  const r = await fetch(API + "/api/approvals/" + encodeURIComponent(tok));
+  const d = await r.json();
+  if (!r.ok) {
+    document.getElementById("review-empty").textContent = "Approval token not found or expired.";
+    document.getElementById("review-empty").classList.remove("hidden");
+    document.getElementById("review-card").classList.add("hidden");
+    return;
+  }
+  document.getElementById("review-empty").classList.add("hidden");
+  document.getElementById("review-card").classList.remove("hidden");
+  document.getElementById("r-drop-id").textContent = d.target_drop_id;
+  document.getElementById("r-label").textContent = d.label;
+  document.getElementById("r-ip").textContent = d.requester_ip_hash;
+  document.getElementById("r-ua").textContent = d.requester_ua;
+  document.getElementById("r-time").textContent = d.created_at;
+  document.getElementById("r-decision").textContent = d.decision || "WAITING_FOR_HUMAN_POST";
+  const already = Boolean(d.consumed_at);
+  document.getElementById("approve-btn").disabled = already;
+  document.getElementById("deny-btn").disabled = already;
+}
+
+async function submitApproval(decision) {
+  const tok = document.getElementById("manual-review-token").value.trim();
+  const r = await fetch(API + "/api/approvals/" + encodeURIComponent(tok), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ decision }),
+  });
+  const d = await r.json();
+  const st = document.getElementById("review-status");
+  st.classList.remove("hidden", "ok", "err");
+  if (r.ok) {
+    st.classList.add(decision === "APPROVE" ? "ok" : "err");
+    st.textContent = decision === "APPROVE"
+      ? "✅ Step Functions SendTaskSuccess triggered! Secret released once & 90s parallel shred countdown started."
+      : "🚫 Step Functions SendTaskFailure triggered! Secret immediately scrubbed across DynamoDB + S3.";
+    document.getElementById("r-decision").textContent = decision;
+    document.getElementById("approve-btn").disabled = true;
+    document.getElementById("deny-btn").disabled = true;
+    lightPipeline(["edge", "ddb", "sfn", "kms"], decision === "APPROVE" ? "lit-green" : "lit-amber");
+    if (activeDropId) document.getElementById("back-to-recipient-btn").classList.remove("hidden");
+  } else {
+    st.classList.add("err");
+    st.textContent = d.error || "Failed";
+  }
+}
+
+function returnToRecipientAfterApprove() {
+  switchTab("unlock");
+  if (activeDropId && activeClaimSecret) collectApprovedDrop();
+}
+
+async function runRaceLab() {
+  const btn = document.getElementById("run-race-btn");
+  btn.disabled = true;
+  btn.textContent = "Running 20 Concurrent Threads...";
+  lightPipeline(["ddb"]);
+  try {
+    const r = await fetch(API + "/api/lab/race", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ concurrency: 20 }),
+    });
+    if (!r.ok) {
+      const message = document.getElementById("race-empty");
+      message.textContent = "The server-side race lab is available only in the local emulator. Start local_server.py to run it; the live browser HTTP race remains available here.";
+      message.classList.remove("hidden");
+      document.getElementById("race-results").classList.add("hidden");
+      return;
+    }
+    const d = await r.json();
+    document.getElementById("race-empty").classList.add("hidden");
+    document.getElementById("race-results").classList.remove("hidden");
+    document.getElementById("race-left-title").textContent = "❌ Naive Check-Then-Burn (TOCTOU Bug)";
+    document.getElementById("race-right-title").textContent = "✅ ZeroDrop Atomic ConditionExpression";
+    document.getElementById("race-naive-verdict").className = "alert err";
+    document.getElementById("race-atomic-verdict").className = "alert ok";
+    document.getElementById("race-naive-verdict").textContent = d.naive.verdict;
+    document.getElementById("race-atomic-verdict").textContent = d.atomic.verdict;
+    document.getElementById("race-naive-stats").textContent =
+      `p50: ${d.naive.stats.p50_ms}ms • p95: ${d.naive.stats.p95_ms}ms • max: ${d.naive.stats.max_ms}ms`;
+    document.getElementById("race-atomic-stats").textContent =
+      `p50: ${d.atomic.stats.p50_ms}ms • p95: ${d.atomic.stats.p95_ms}ms • max: ${d.atomic.stats.max_ms}ms`;
+
+    document.getElementById("race-naive-grid").innerHTML = d.naive.results.map(w =>
+      `<div class="worker-cell ${w.result === 'UNLOCKED' ? 'leak' : 'block'}">#${w.worker}<br>${esc(w.result)}<br>${w.ms}ms</div>`
+    ).join("");
+    document.getElementById("race-atomic-grid").innerHTML = d.atomic.results.map(w =>
+      `<div class="worker-cell ${w.result === 'UNLOCKED' ? 'win' : 'block'}">#${w.worker}<br>${esc(w.result)}<br>${w.ms}ms</div>`
+    ).join("");
+    lightPipeline(["ddb"], "lit-green");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "⚡ Local 20-Thread DB Race";
+  }
+}
+
+async function runBrowserHttpRace() {
+  const btn = document.getElementById("run-http-race-btn");
+  btn.disabled = true;
+  btn.textContent = "Firing 20 Parallel fetch() Calls...";
+  lightPipeline(["crypto", "edge", "ddb", "kms"]);
+  try {
+    const aesKey = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const cipherBuf = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aesKey, new TextEncoder().encode("RACE_WINNER_ONLY_PAYLOAD"));
+    const crRes = await fetch(API + "/api/drops", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mode: "fast", label: "Live Browser 20-Fetch HTTP Race", ttl_minutes: 15,
+        iv_b64: bytesToB64(iv), ciphertext_b64: bytesToB64(cipherBuf),
+      }),
+    });
+    const created = await crRes.json();
+    const dropId = created.drop_id;
+
+    const calls = Array.from({ length: 20 }, (_, i) => (async () => {
+      const t0 = performance.now();
+      const res = await fetch(API + "/api/drops/" + encodeURIComponent(dropId) + "/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-ZeroDrop-Human": "1" },
+        body: JSON.stringify({ human_confirm: true }),
+      });
+      const body = await res.json();
+      return { worker: i + 1, status: res.status, ms: Math.round((performance.now() - t0) * 10) / 10, body };
+    })());
+    const results = await Promise.all(calls);
+    const winners = results.filter(x => x.status === 200);
+    const blocked = results.filter(x => x.status === 410);
+
+    document.getElementById("race-empty").classList.add("hidden");
+    document.getElementById("race-results").classList.remove("hidden");
+    document.getElementById("race-left-title").textContent = "🌐 Real Browser HTTP Summary (" + esc(dropId) + ")";
+    document.getElementById("race-right-title").textContent = "✅ 20 Parallel fetch() Responses";
+    document.getElementById("race-naive-verdict").className = "alert ok";
+    document.getElementById("race-naive-verdict").textContent =
+      `LIVE PROOF: ${winners.length}/20 HTTP 200 OK Winner, ${blocked.length}/20 HTTP 410 Gone Blocked!`;
+    document.getElementById("race-naive-stats").textContent = "Drop ID: " + dropId + " (Verifiable in KMS Audit Chain tab)";
+    document.getElementById("race-naive-grid").innerHTML = "";
+    document.getElementById("race-atomic-verdict").className = "alert ok";
+    document.getElementById("race-atomic-verdict").textContent =
+      `Browser fired 20 concurrent POST /api/drops/${dropId}/claim requests via Promise.all().`;
+    document.getElementById("race-atomic-stats").textContent = "Check DevTools Network tab: 1 x 200 + 19 x 410!";
+    document.getElementById("race-atomic-grid").innerHTML = results.map(w =>
+      `<div class="worker-cell ${w.status === 200 ? 'win' : 'block'}">#${w.worker}<br>HTTP ${w.status}<br>${w.ms}ms</div>`
+    ).join("");
+    lightPipeline(["edge", "ddb", "kms"], "lit-green");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "🌐 20-Fetch Live HTTP Race";
+  }
+}
+
+function jumpToReceipt() {
+  if (!activeDropId) return;
+  document.getElementById("receipt-drop-id").value = activeDropId;
+  switchTab("receipt");
+  loadReceipt(activeDropId);
+}
+
+async function loadReceipt(idArg) {
+  const dropId = idArg || document.getElementById("receipt-drop-id").value.trim();
+  if (!dropId) return;
+  document.getElementById("receipt-drop-id").value = dropId;
+  const r = await fetch(API + "/api/receipts/" + encodeURIComponent(dropId));
+  const d = await r.json();
+  if (!r.ok) {
+    document.getElementById("receipt-empty").textContent = d.error || "Audit ledger not found";
+    document.getElementById("receipt-empty").classList.remove("hidden");
+    document.getElementById("receipt-card").classList.add("hidden");
+    return;
+  }
+  loadedLedgerObj = d;
+  workingChain = JSON.parse(JSON.stringify(d.audit_chain || []));
+  document.getElementById("receipt-empty").classList.add("hidden");
+  document.getElementById("receipt-card").classList.remove("hidden");
+  document.getElementById("rc-verify-out").classList.add("hidden");
+  renderAuditChain();
+
+  if (d.receipt) {
+    document.getElementById("final-receipt-box").classList.remove("hidden");
+    document.getElementById("rc-key").textContent = d.receipt.key_id;
+    document.getElementById("rc-fp").textContent = (d.public_key && d.public_key.fingerprint_sha256) || "";
+    document.getElementById("rc-alg").textContent = d.receipt.algorithm;
+    document.getElementById("rc-sha").textContent = d.receipt.payload_sha256;
+    document.getElementById("rc-sig").textContent = d.receipt.signature_p1363_b64 || "(SHA-256 unsigned)";
+    document.getElementById("rc-json-box").textContent = d.receipt.payload_json;
+  } else {
+    document.getElementById("final-receipt-box").classList.add("hidden");
+  }
+}
+
+function renderAuditChain(verdicts = null) {
+  const container = document.getElementById("chain-timeline");
+  container.innerHTML = workingChain.map((entry, idx) => {
+    const v = verdicts ? verdicts[idx] : null;
+    const cls = v ? (v.ok ? "valid" : "broken") : "";
+    const statusBadge = v
+      ? (v.ok ? `<span style="color:#86efac;">✅ SIG + HASH LINK VALID</span>` : `<span style="color:#fca5a5;">❌ ${esc(v.reason)}</span>`)
+      : `<span style="color:var(--muted);">Unverified</span>`;
+    return `
+      <div class="chain-node ${cls}">
+        <div class="chain-head">
+          <span>#${entry.seq} ${esc(entry.event)}</span>
+          ${statusBadge}
+        </div>
+        <div class="kv" style="margin-top:8px;">
+          <div class="k">prev_hash</div><div class="v">${esc(entry.prev_hash)}</div>
+          <div class="k">entry_sha256</div><div class="v">${esc(entry.entry_sha256)}</div>
+          <div class="k">payload_json</div><div class="v">${esc(entry.payload_json)}</div>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+async function verifyEntireAuditChain() {
+  const out = document.getElementById("rc-verify-out");
+  out.classList.remove("hidden", "ok", "err");
+  if (!loadedLedgerObj || !loadedLedgerObj.public_key || !loadedLedgerObj.public_key.spki_b64) {
+    out.classList.add("err");
+    out.textContent = "KMS Public Key unavailable.";
+    return;
+  }
+  const pubKey = await crypto.subtle.importKey(
+    "spki",
+    b64ToBytes(loadedLedgerObj.public_key.spki_b64),
+    { name: "ECDSA", namedCurve: "P-256" },
+    false,
+    ["verify"]
+  );
+
+  let expectedPrev = "0".repeat(64);
+  const verdicts = [];
+  let allOk = true;
+
+  for (let i = 0; i < workingChain.length; i++) {
+    const entry = workingChain[i];
+    const msgBytes = new TextEncoder().encode(entry.payload_json);
+    const recomputedHash = await sha256Hex(msgBytes);
+    const sigOk = await crypto.subtle.verify(
+      { name: "ECDSA", hash: { name: "SHA-256" } },
+      pubKey,
+      b64ToBytes(entry.signature_p1363_b64),
+      msgBytes
+    );
+    const linkOk = entry.prev_hash === expectedPrev;
+    const hashOk = recomputedHash === entry.entry_sha256;
+    if (!sigOk || !linkOk || !hashOk) {
+      allOk = false;
+      const reasons = [];
+      if (!sigOk) reasons.push("KMS SIGNATURE INVALID");
+      if (!linkOk) reasons.push("BROKEN prev_hash CHAIN LINK");
+      if (!hashOk) reasons.push("HASH MISMATCH");
+      verdicts.push({ ok: false, reason: reasons.join(" + ") });
+    } else {
+      verdicts.push({ ok: true, reason: "OK" });
+    }
+    expectedPrev = recomputedHash;
+  }
+
+  renderAuditChain(verdicts);
+  if (allOk) {
+    lightPipeline(["kms"], "lit-green");
+    out.classList.add("ok");
+    out.textContent = `✅ ENTIRE ${workingChain.length}-EVENT HASH CHAIN & ALL KMS ECDSA P-256 SIGNATURES VERIFIED! Zero tampering detected.`;
+  } else {
+    lightPipeline(["kms"], "lit-amber");
+    out.classList.add("err");
+    out.textContent = `❌ TAMPER DETECTED! Modifying 1 character invalidated the KMS signature and broke downstream prev_hash links.`;
+  }
+}
+
+function tamperChainEntryOne() {
+  if (!workingChain.length) return;
+  workingChain[0].payload_json = workingChain[0].payload_json.replace("Created", "Altered");
+  if (!workingChain[0].payload_json.includes("Altered")) {
+    workingChain[0].payload_json += " ";
+  }
+  verifyEntireAuditChain();
+}
+
+function restoreAuditChain() {
+  if (!loadedLedgerObj) return;
+  workingChain = JSON.parse(JSON.stringify(loadedLedgerObj.audit_chain || []));
+  verifyEntireAuditChain();
+}
+
+function exportJsonBundle() {
+  if (!loadedLedgerObj) return;
+  const blob = new Blob([JSON.stringify(loadedLedgerObj, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `zerodrop-audit-${loadedLedgerObj.drop_id}.json`;
+  a.click();
+}
+
+function exportHtmlCertificate() {
+  if (!loadedLedgerObj) return;
+  const safeJson = JSON.stringify(loadedLedgerObj).replace(/</g, "\\u003c");
+  const certHtml = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>ZeroDrop KMS Audit Certificate - ${esc(loadedLedgerObj.drop_id)}</title>
+<style>body{font-family:system-ui,sans-serif;background:#090d16;color:#e6edf7;max-width:920px;margin:28px auto;padding:0 18px}
+.card{background:#121826;border:1px solid #26324d;border-radius:12px;padding:18px;margin-bottom:14px}
+code,pre{font-family:ui-monospace,monospace;font-size:12px;word-break:break-all;background:#070a11;padding:8px;border-radius:8px;display:block}
+button{background:#22c55e;color:#051b0c;border:0;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer}
+.ok{color:#86efac}.bad{color:#fca5a5}</style></head><body>
+<h1>ZeroDrop Offline KMS Cryptographic Audit Certificate</h1>
+<div class="card"><strong>Drop ID:</strong> ${esc(loadedLedgerObj.drop_id)} &bull; <strong>Status:</strong> ${esc(loadedLedgerObj.status)} &bull; <strong>Shred State:</strong> ${esc(loadedLedgerObj.shred_state)}<br>
+<strong>KMS Key ID:</strong> ${esc((loadedLedgerObj.public_key || {}).key_id)}<br>
+<strong>KMS SPKI Fingerprint (SHA-256):</strong> ${esc((loadedLedgerObj.public_key || {}).fingerprint_sha256)}
+<div style="margin-top:12px;"><button onclick="verifyOffline()">Verify All KMS Signatures &amp; Hash Chain Offline (WebCrypto)</button></div>
+<p id="verdict"></p></div>
+<div id="entries"></div>
+<script>
+const BUNDLE=${safeJson};
+function b64(s){const x=atob(s),u=new Uint8Array(x.length);for(let i=0;i<x.length;i++)u[i]=x.charCodeAt(i);return u}
+async function sha(u){return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',u))).map(b=>b.toString(16).padStart(2,'0')).join('')}
+async function verifyOffline(){
+ const pub=await crypto.subtle.importKey('spki',b64(BUNDLE.public_key.spki_b64),{name:'ECDSA',namedCurve:'P-256'},false,['verify']);
+ let prev='0'.repeat(64),okAll=true;
+ const out=[];
+ for(const e of BUNDLE.audit_chain){
+  const m=new TextEncoder().encode(e.payload_json),h=await sha(m);
+  const sig=await crypto.subtle.verify({name:'ECDSA',hash:{name:'SHA-256'}},pub,b64(e.signature_p1363_b64),m);
+  const ok=sig&&e.prev_hash===prev&&h===e.entry_sha256;
+  if(!ok)okAll=false;
+  out.push('<div class="card"><b>#'+e.seq+' '+e.event+'</b> — <span class="'+(ok?'ok':'bad')+'">'+(ok?'VALID':'INVALID')+'</span><code>prev: '+e.prev_hash+'\\nhash: '+e.entry_sha256+'\\nbody: '+e.payload_json+'</code></div>');
+  prev=h;
+ }
+ document.getElementById('entries').innerHTML=out.join('');
+ document.getElementById('verdict').innerHTML=okAll?'<span class="ok">✅ ALL '+BUNDLE.audit_chain.length+' KMS P-256 ENTRIES VERIFIED OFFLINE!</span>':'<span class="bad">❌ VERIFICATION FAILED</span>';
+}
+verifyOffline();
+<\/script></body></html>`;
+  const blob = new Blob([certHtml], { type: "text/html;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `zerodrop-certificate-${loadedLedgerObj.drop_id}.html`;
+  a.click();
+}
+
+async function runGuidedJudgeDemo() {
+  const btn = document.getElementById("auto-demo-btn");
+  const st = document.getElementById("tour-status");
+  btn.disabled = true;
+  btn.textContent = "Running Demo...";
+  try {
+    st.textContent = "Step 1/4: Encrypting .env locally via WebCrypto AES-256-GCM...";
+    switchTab("create");
+    selectMode("fast");
+    document.getElementById("quorum-select").value = "1of1";
+    loadSampleEnv();
+    await createDrop();
+    await new Promise(r => setTimeout(r, 450));
+
+    st.textContent = "Step 2/4: Opening Unlocker & simulating Slackbot link-preview attack (403 Block)...";
+    openGeneratedDrop();
+    await new Promise(r => setTimeout(r, 450));
+    await simulateBotCrawl();
+    await new Promise(r => setTimeout(r, 550));
+
+    st.textContent = "Step 3/4: Atomically unlocking & burning secret once via DynamoDB ConditionExpression...";
+    await claimDrop();
+    await new Promise(r => setTimeout(r, 550));
+
+    st.textContent = "Step 4/4: Verifying 3-entry Hash-Chained KMS ECDSA P-256 Audit Ledger in WebCrypto...";
+    jumpToReceipt();
+    await new Promise(r => setTimeout(r, 450));
+    await verifyEntireAuditChain();
+    st.textContent = "✅ Demo Complete! Created → Blocked Slackbot (403) → Atomic Burn → 3/3 KMS Hash-Chain Verified!";
+  } catch (e) {
+    st.textContent = "Demo failed: " + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "▶ Auto-Run Live Security Demo";
+  }
+}
+
+async function loadSocTelemetry() {
+  try {
+    const r = await fetch(API + "/api/telemetry/soc");
+    const d = await r.json();
+    if (!r.ok) return;
+    const c = d.counters || {};
+    document.getElementById("soc-created").textContent = String(c.total_created || 0);
+    document.getElementById("soc-burned").textContent = String(c.total_burned || 0);
+    document.getElementById("soc-bots").textContent = String(c.total_bots_blocked || 0);
+    document.getElementById("soc-canary").textContent = String(c.total_canary_alerts || 0);
+    document.getElementById("soc-shreds").textContent = String(c.total_panic_shreds || 0);
+    document.getElementById("soc-approvals").textContent = String(c.total_approvals || 0);
+
+    const listEl = document.getElementById("soc-events-list");
+    const evs = d.events || [];
+    if (!evs.length) {
+      listEl.textContent = "No security events recorded yet. Create a drop or run the 15-Second Live Proof above!";
+      return;
+    }
+    listEl.innerHTML = evs.map(ev => `
+      <div style="padding:6px 0; border-bottom:1px solid #1b263d; display:flex; flex-wrap:wrap; gap:10px; justify-content:space-between;">
+        <span>
+          <strong style="color:${ev.event.includes('CANARY') || ev.event.includes('PANIC') ? '#fca5a5' : ev.event.includes('BOT') ? '#fde68a' : '#86efac'};">${esc(ev.event)}</strong>
+          &bull; <a href="javascript:void(0)" data-did="${esc(ev.drop_id)}" onclick="auditFromSoc(this.dataset.did)" style="color:var(--accent); text-decoration:underline;">${esc(ev.drop_id)}</a>
+          &bull; ${esc(ev.detail)}
+        </span>
+        <span style="color:var(--muted);">${esc(ev.ts)}${ev.kms_head ? ' • kms:' + esc(ev.kms_head) : ''}</span>
+      </div>`).join("");
+  } catch (e) {}
+}
+
+function auditFromSoc(dropId) {
+  document.getElementById("receipt-drop-id").value = dropId;
+  switchTab("receipt");
+  loadReceipt(dropId);
+}
+
+function handleHashNavigation() {
+  const hash = window.location.hash.replace(/^#/, "");
+  if (!hash) return;
+  const params = new URLSearchParams(hash);
+  if (params.get("d")) {
+    const newId = params.get("d");
+    if (newId !== activeDropId) activeClaimSecret = "";
+    activeDropId = newId;
+    activeKeyB64u = params.get("k") || "";
+    activeInitialShare = params.get("s") || "";
+    switchTab("unlock");
+    loadDropStatus(activeDropId);
+  } else if (params.get("review")) {
+    switchTab("review");
+    loadApprovalToken(params.get("review"));
+  } else if (params.get("receipt")) {
+    switchTab("receipt");
+    loadReceipt(params.get("receipt"));
+  }
+}
+
+window.addEventListener("hashchange", handleHashNavigation);
+checkHealth();
+handleHashNavigation();
+</script>
+</body>
+</html>

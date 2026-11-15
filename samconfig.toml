@@ -1,0 +1,9 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "zerodrop"
+resolve_s3 = true
+s3_prefix = "zerodrop"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = false

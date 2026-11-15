@@ -1,0 +1,267 @@
+{
+  "Comment": "ZeroDrop Break-Glass Approval & Parallel Zero-Retention Shred Workflow",
+  "StartAt": "NotifyAndAwaitApproval",
+  "States": {
+    "NotifyAndAwaitApproval": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+      "TimeoutSeconds": 3600,
+      "Parameters": {
+        "FunctionName": "${WorkflowTaskFunctionArn}",
+        "Payload": {
+          "action": "notify_approval",
+          "task_token.$": "$$.Task.Token",
+          "drop_id.$": "$.drop_id",
+          "label.$": "$.label",
+          "requester_ip_hash.$": "$.requester_ip_hash",
+          "requester_ua.$": "$.requester_ua",
+          "review_base_url.$": "$.review_base_url",
+          "demo_inbox.$": "$.demo_inbox"
+        }
+      },
+      "ResultPath": "$.approval",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "DeniedByOwner",
+            "States.Timeout",
+            "States.TaskFailed"
+          ],
+          "ResultPath": "$.error",
+          "Next": "ParallelDenyShred"
+        }
+      ],
+      "Next": "EvaluateDecision"
+    },
+    "EvaluateDecision": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.approval.decision",
+          "StringEquals": "APPROVE",
+          "Next": "ReleaseOnceAndSign"
+        }
+      ],
+      "Default": "ParallelDenyShred"
+    },
+    "ReleaseOnceAndSign": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${WorkflowTaskFunctionArn}",
+        "Payload": {
+          "action": "release_and_sign",
+          "drop_id.$": "$.drop_id",
+          "requester_ip_hash.$": "$.requester_ip_hash",
+          "requester_ua.$": "$.requester_ua"
+        }
+      },
+      "ResultSelector": {
+        "receipt_id.$": "$.Payload.receipt_id",
+        "s3_key.$": "$.Payload.s3_key",
+        "summary.$": "$.Payload.summary"
+      },
+      "ResultPath": "$.release",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Next": "WaitGracePeriod"
+    },
+    "WaitGracePeriod": {
+      "Type": "Wait",
+      "Seconds": 90,
+      "Next": "ParallelApproveShred"
+    },
+    "ParallelApproveShred": {
+      "Type": "Parallel",
+      "Branches": [
+        {
+          "StartAt": "ScrubDynamoCiphertextOnApprove",
+          "States": {
+            "ScrubDynamoCiphertextOnApprove": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::aws-sdk:dynamodb:updateItem",
+              "Parameters": {
+                "TableName": "${DropsTableName}",
+                "Key": {
+                  "drop_id": {
+                    "S.$": "$.drop_id"
+                  }
+                },
+                "UpdateExpression": "SET shred_state = :shredded, shredded_at = :ts REMOVE ciphertext_b64",
+                "ExpressionAttributeValues": {
+                  ":shredded": {
+                    "S": "SHREDDED"
+                  },
+                  ":ts": {
+                    "S.$": "$$.State.EnteredTime"
+                  }
+                }
+              },
+              "End": true,
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2.0
+                }
+              ]
+            }
+          }
+        },
+        {
+          "StartAt": "DeleteS3BlobOnApprove",
+          "States": {
+            "DeleteS3BlobOnApprove": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::aws-sdk:s3:deleteObject",
+              "Parameters": {
+                "Bucket": "${VaultBucketName}",
+                "Key.$": "$.release.s3_key"
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2.0
+                }
+              ],
+              "End": true
+            }
+          }
+        }
+      ],
+      "ResultPath": "$.shred_results",
+      "Next": "NotifyApproveShredComplete"
+    },
+    "ParallelDenyShred": {
+      "Type": "Parallel",
+      "Branches": [
+        {
+          "StartAt": "ScrubDynamoCiphertextOnDeny",
+          "States": {
+            "ScrubDynamoCiphertextOnDeny": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::aws-sdk:dynamodb:updateItem",
+              "Parameters": {
+                "TableName": "${DropsTableName}",
+                "Key": {
+                  "drop_id": {
+                    "S.$": "$.drop_id"
+                  }
+                },
+                "UpdateExpression": "SET #st = :denied, shred_state = :shredded, burned_at = :ts, shredded_at = :ts REMOVE ciphertext_b64",
+                "ExpressionAttributeNames": {
+                  "#st": "status"
+                },
+                "ExpressionAttributeValues": {
+                  ":denied": {
+                    "S": "DENIED_SHREDDED"
+                  },
+                  ":shredded": {
+                    "S": "SHREDDED"
+                  },
+                  ":ts": {
+                    "S.$": "$$.State.EnteredTime"
+                  }
+                }
+              },
+              "End": true,
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2.0
+                }
+              ]
+            }
+          }
+        },
+        {
+          "StartAt": "DeleteS3BlobOnDeny",
+          "States": {
+            "DeleteS3BlobOnDeny": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::aws-sdk:s3:deleteObject",
+              "Parameters": {
+                "Bucket": "${VaultBucketName}",
+                "Key.$": "$.s3_key"
+              },
+              "End": true,
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2.0
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "ResultPath": "$.deny_shred_results",
+      "Next": "NotifyDeniedOrExpired"
+    },
+    "NotifyApproveShredComplete": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "${AlertsTopicArn}",
+        "Subject": "[ZeroDrop] Approved & Permanently Shredded",
+        "Message.$": "States.Format('ZeroDrop KMS Audit: Drop {} ({}) was owner-approved and all residual ciphertext/S3 data was shredded at {}.', $.drop_id, $.label, $$.State.EnteredTime)"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "End": true
+    },
+    "NotifyDeniedOrExpired": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "${AlertsTopicArn}",
+        "Subject": "[ZeroDrop] Access Denied / Timed Out & Shredded",
+        "Message.$": "States.Format('ZeroDrop Shield: Drop {} ({}) was denied or timed out waiting for approval, and permanently shredded at {}.', $.drop_id, $.label, $$.State.EnteredTime)"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "End": true
+    }
+  }
+}
