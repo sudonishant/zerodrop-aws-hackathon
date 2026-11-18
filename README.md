@@ -1,4 +1,4 @@
-    # ZeroDrop v4.0 APEX
+    # ZeroDrop v4.0 APEX   
 
 **Client-side encrypted secret sharing with Shamir quorums, optional passphrases, atomic claims, owner shred, and an AWS serverless design.**
 
